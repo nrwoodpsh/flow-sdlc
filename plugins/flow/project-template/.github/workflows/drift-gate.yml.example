@@ -1,0 +1,87 @@
+# ─────────────────────────────────────────────────────────────
+# Drift Gate (서버측·우회 불가) — 옵트인
+# ─────────────────────────────────────────────────────────────
+# 로컬 git 훅(.githooks/pre-commit = drift-hook.sh)은 `git commit --no-verify`로 우회된다.
+# 이 워크플로우는 PR에서 한 번 더 막아 **우회 불가능한 이중 방어**를 만든다:
+#   코드 변경이 있는데 doc/01.work/ 갱신이 없으면 PR을 실패(머지 차단)시킨다.
+#
+# ⚠ 판정 규칙 정본은 flow의 `drift-check` 스킬이다.
+#   훅(drift-hook.sh)·이 파일·스킬 셋이 **같은 규칙**을 써야 한다.
+#   하나만 고치면 "로컬은 통과, CI는 차단" 같은 어긋남이 생긴다.
+#   규칙: ① drift.ignore 에 맞으면 소스 아님
+#         ② drift.sourceGlobs 가 있으면 그 안만 소스
+#         ③ 없으면 doc/·spike/·.claude/·.github/ 밖이고 .md 아닌 것
+#         ④ doc/01.work/ 에 유닛이 하나도 없으면 검사 자체를 건너뛴다
+#         문서는 doc/01.work/ 아무거나 인정 (2.task·3.contract·7.summary)
+#
+# 로컬 훅은 커밋을 막지만 `--no-verify`로 넘길 수 있다. 서버측인 이 게이트는 넘길 수 없어
+# 옵트인으로 둔다 — 그래서 `.example`로 배포된다. 활성화하려면 확장자를 벗겨라:
+#   mv .github/workflows/drift-gate.yml.example .github/workflows/drift-gate.yml
+#
+# 차단이 아니라 알림만 원하면 아래 `process.exit(1)`을 `process.exit(0)`으로,
+# `::error::`를 `::warning::`으로 바꾼다.
+# ─────────────────────────────────────────────────────────────
+name: Drift Gate
+on: pull_request
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: 코드 변경엔 작업 문서 동반 확인
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git diff --name-only "$BASE" "$HEAD" > /tmp/changed.txt
+          node - <<'EOF'
+          const fs = require('fs');
+          const files = fs.readFileSync('/tmp/changed.txt', 'utf8').split('\n').filter(Boolean);
+
+          let cfg = {};
+          try { cfg = JSON.parse(fs.readFileSync('workflow.config.json', 'utf8')); } catch {}
+          const d = cfg.drift || {};
+          const sourceGlobs = Array.isArray(d.sourceGlobs) ? d.sourceGlobs : [];
+          const ignore = Array.isArray(d.ignore) ? d.ignore : [];
+
+          // glob → 정규식. `**`는 경로 구분자 포함, `*`는 미포함.
+          // `**/x` 는 최상위 파일에도 맞아야 하므로 디렉터리 부분을 옵션으로 만든다.
+          const rx = g => new RegExp('^' + g
+            .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+            .replace(/\*\*\//g, '@DIRS@')
+            .replace(/\*\*/g, '@ANY@')
+            .replace(/\*/g, '[^/]*')
+            .replace(/@DIRS@/g, '(?:.*/)?')
+            .replace(/@ANY@/g, '.*')
+            + '$');
+          const any = (f, gs) => gs.some(g => rx(g).test(f));
+
+          const isSource = f => {
+            if (any(f, ignore)) return false;
+            if (sourceGlobs.length) return any(f, sourceGlobs);
+            if (/^(doc|spike|\.claude|\.github)\//.test(f)) return false;
+            if (/\.md$/.test(f)) return false;
+            return true;
+          };
+
+          // 아직 문서 체인을 안 쓰는 프로젝트는 검사하지 않는다 (훅과 같은 규칙 ④).
+          const ls = p => { try { return fs.readdirSync(p, {withFileTypes: true}); } catch { return []; } };
+          const hasUnit = ls('doc/01.work')
+            .filter(e => e.isDirectory())
+            .some(dom => ls(`doc/01.work/${dom.name}`).some(u => u.isDirectory()));
+          if (!hasUnit) {
+            console.log('drift-gate: 건너뜀 — doc/01.work/ 에 유닛이 없습니다.');
+            process.exit(0);
+          }
+
+          const src  = files.filter(isSource);
+          const docs = files.filter(f => f.startsWith('doc/01.work/'));
+
+          if (src.length && !docs.length) {
+            console.log(`::error::코드 변경 ${src.length}건이 있으나 doc/01.work/ 갱신이 없습니다. /flow:sync 실행 후 다시 푸시하세요.`);
+            src.slice(0, 10).forEach(f => console.log(`  - ${f}`));
+            process.exit(1);
+          }
+          console.log(`drift-gate: OK (소스 ${src.length}건 / 문서 ${docs.length}건)`);
+          EOF

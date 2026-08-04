@@ -1,0 +1,38 @@
+{
+  "contract": {
+    "pathGlob": "*/3.contract/*.ts",
+    "gate": "npx -y -p typescript tsc --noEmit --strict {file}"
+  },
+  "build": {
+    "command": "npm run build"
+  },
+  "test": {
+    "command": "npm test",
+    "browser": "playwright",
+    "headless": false
+  },
+  "drift": {
+    "sourceGlobs": [
+      "src/**",
+      "app/**"
+    ],
+    "ignore": [
+      "**/*.md",
+      "**/*.test.*",
+      "spike/**"
+    ]
+  },
+  "review": {
+    "severity": "critical"
+  },
+  "publish": {
+    "target": "notion",
+    "notionParent": ""
+  },
+  "theme": {
+    "source": "",
+    "stack": "",
+    "targetPath": ""
+  },
+  "language": "korean"
+}

@@ -1,0 +1,30 @@
+# ── OS 잔재
+.DS_Store
+Thumbs.db
+*.swp
+
+# ── Claude Code 설정
+#   .claude/ 는 보통 전역 gitignore로 무시된다. 팀이 함께 써야 하는 것만 추적하고,
+#   개인 설정(settings.local.json)과 그 외는 무시한다.
+!.claude/
+.claude/*
+!.claude/settings.json
+!.claude/rules/
+
+# ── 자주 누락
+node_modules/
+.env
+.env.local
+*.log
+dist/
+build/
+.cache/
+
+# ── IDE
+.idea/
+.vscode/
+*.iml
+
+# ── spike (버릴 검증 코드 — README만 추적, 내용물 무시)
+spike/*
+!spike/README.md
