@@ -382,6 +382,22 @@ for f in md_files():
                 fails.append(f"매달린 절 이름 {f}:{i} — `{who}`·`{tail}` "
                              f"(절 이름을 지울 때 뒤쪽이 남았다)")
 
+# ── 8-1. 절 이름에 번호·라벨이 붙었나 ──
+# 검사 8 은 `X`의 `Y` 형태만 본다. 번호·라벨 절 **자체**는 아무 검사도 안 봤다 —
+# 실제로 `## 절차 D — 문서 리뷰` 와 `### ① 무엇이 필요한가` 가 통과한 채 들어갔고,
+# 둘 다 밖에서 **번호로** 가리키는 줄까지 딸려 있었다(`(아래 절차 3)`·`(아래 위임 판정 ②)`).
+# 절을 하나 더하면 그 참조가 조용히 어긋난다.
+# 산문·프롬프트 안의 번호는 대상이 아니다 — `run.md` 의 `① 합친다 ② 나눈다` 는
+# 사용자가 번호로 고르는 메뉴고, 순서 있는 `**N. 이름**` 절차 줄도 번호가 뜻이다.
+# 템플릿(`03.templates/`)은 사람이 절 번호로 자리를 찾는 골격이라 뺀다.
+LABELED = re.compile(r'^#{2,4}\s+(?:[0-9]+\s*[.)]|[①-⑳]|절차\s+[A-Z0-9])')
+for f in md_files():
+    if f.endswith('CLAUDE.md') or 'plugin-authoring' in f or '03.templates' in f:
+        continue
+    for i, l in enumerate(open(f).read().split('\n'), 1):
+        if LABELED.match(l) and '단계' not in l:
+            fails.append(f"번호·라벨 절 {f}:{i} — {l.strip()[:50]}  (이름만 쓴다)")
+
 # ── 9. 스킬 description 의 "누가 쓴다"가 사실인가 ──
 # description 에 `누가 쓴다`를 적는다. 그 주장이 틀리면 **매 턴 거짓말이 실린다.**
 # 실제 근거는 커맨드의 `## 연결` → `- **스킬**:` 줄이다.
