@@ -1,0 +1,16 @@
+{
+  "name": "flow-sdlc",
+  "owner": {
+    "name": "park seung hyun",
+    "email": "nrwoodpsh@gmail.com"
+  },
+  "description": "범용 AI 개발 워크플로우 마켓플레이스. flow 플러그인을 배포한다.",
+  "plugins": [
+    {
+      "name": "flow",
+      "source": "./plugins/flow",
+      "description": "개발 라이프사이클 오케스트레이터 — 요구(prd) → 설계(design) → 구현(build) → 검증(verify) → 리뷰(review) → 수렴(sync) → 커밋(commit). 요구 ID로 잇는 추적 축 + 기계 게이트(Write·Edit 는 훅이 판정) + 되돌릴 수 없는 명령 차단. 어디서 시작할지 모르면 /flow:next.",
+      "version": "0.9.0"
+    }
+  ]
+}

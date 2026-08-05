@@ -33,6 +33,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
 LINT = os.path.join(HERE, 'lint.py')
 
+sys.path.insert(0, HERE)
+import gen_docs                                            # noqa: E402  픽스처가 생성기를 쓴다
+
 TPL = 'plugins/flow/project-template/doc/00.ref/03.templates'
 F = '`' * 3          # 픽스처 안에 코드펜스를 쓰려면 이렇게 이어 붙인다
 
@@ -55,6 +58,97 @@ def _review_template():
 def _skill(name, body, fm=''):
     return {f'plugins/flow/skills/{name}/SKILL.md':
             f"---\nname: {name}\n{fm}---\n\n# {name}\n\n{body}"}
+
+
+TOPO_REL = 'plugins/flow/flow.topology.json'
+
+
+def _guard_sh(declared, marked):
+    """가짜 guard-danger.sh — 머리말 고정 형식 블록 + 본문의 `@rule` 표시."""
+    head = ['#!/usr/bin/env bash', '# @flow-shell-rules v1']
+    for rid in declared:
+        head.append(f"# rule: {rid} | block | 무엇을 막나 {rid} | 왜 셸에 있나 {rid}")
+    head.append('# limit: MCP 파일 도구 | matcher 가 도구 이름이라 훅이 안 돈다')
+    head.append('# @flow-shell-rules-end')
+    body = ['', 'set -uo pipefail', '']
+    for rid in marked:
+        body.append(f"# @rule {rid}")
+        body.append('true')
+    return '\n'.join(head + body) + '\n'
+
+
+def _manifests(v_plugin, v_market, desc='같은 설명'):
+    return {
+        'plugins/flow/.claude-plugin/plugin.json': json.dumps(
+            {'name': 'flow', 'description': desc, 'version': v_plugin},
+            ensure_ascii=False, indent=2),
+        '.claude-plugin/marketplace.json': json.dumps(
+            {'name': 'flow-sdlc',
+             'plugins': [{'name': 'flow', 'source': './plugins/flow',
+                          'description': desc, 'version': v_market}]},
+            ensure_ascii=False, indent=2),
+    }
+
+
+def _topology(drop=None):
+    """최소 topology — 커맨드 둘. `drop` 을 주면 그 키를 통째로 뺀다."""
+    def cmd(order, phase, nxt):
+        c = {'order': order, 'phase': phase, 'after': [], 'next': nxt,
+             'entry': {'machine': [], 'content': [], 'promise': []},
+             'loads': None, 'procedures': None}
+        if drop:
+            c.pop(drop, None)
+        return c
+    return {
+        'version': 1,
+        'pending': ['commands.*.loads', 'commands.*.procedures'],
+        'manifest': {'descriptionHead': '오케스트레이터 — ',
+                     'descriptionChain': ['prd', 'build'],
+                     'descriptionTail': '끝.'},
+        'commands': {'prd': cmd(1, '요구', ['build']), 'build': cmd(2, '구현', [])},
+    }
+
+
+def _guard_rules():
+    return {
+        'classes': {'irreversible': {'level': 'block', '뜻': '되돌릴 수 없다'}},
+        'rules': [{'id': 'git-push', 'tool': 'git', 'words': 'push',
+                   'class': 'irreversible', 'level': 'block', 'label': 'git push',
+                   'why': '원격 이력이 바뀐다.', 'advice': '사람이 합니다.'}],
+        'expect': [{'cmd': 'git push', 'verdict': 'block', 'rule': 'git-push'}],
+        'limits': ['셸 우회 — eval'],
+    }
+
+
+def _built(corrupt=False):
+    """정본을 두고 **생성기를 돌려** 만드는 픽스처.
+
+    `corrupt=True` 면 생성 뒤 마커 안을 한 줄 고친다 = 사람이 생성물을 손으로 고친 상태.
+    """
+    def build(root):
+        files = {
+            gen_docs.GUARD_RULES: json.dumps(_guard_rules(), ensure_ascii=False, indent=2),
+            TOPO_REL: json.dumps(_topology(), ensure_ascii=False, indent=2),
+            gen_docs.GUARD_SH: _guard_sh(('a-rule',), ('a-rule',)),
+            'README.md': ("# r\n\n" + gen_docs.BLOCK.format('guard-table') + '\n'
+                          + gen_docs.BLOCK_END.format('guard-table') + '\n'),
+            'CLAUDE.md': ("# c\n\n" + gen_docs.BLOCK.format('guard-summary') + '\n'
+                          + gen_docs.BLOCK_END.format('guard-summary') + '\n'),
+        }
+        files.update(_manifests('1.2.3', '1.2.3'))
+        for rel, body in files.items():
+            p = os.path.join(root, rel)
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with open(p, 'w', encoding='utf-8') as fh:
+                fh.write(body)
+        gen_docs.write(root)
+        if corrupt:
+            p = os.path.join(root, 'README.md')
+            with open(p, encoding='utf-8') as fh:
+                t = fh.read()
+            with open(p, 'w', encoding='utf-8') as fh:
+                fh.write(t.replace('| `git push` |', '| `git push (손으로 고쳤다)` |'))
+    return build
 
 
 def _review_skill(sections, fm='output-template: 06.review\n'):
@@ -142,6 +236,33 @@ CASES = {
         {'plugins/flow/commands/design.md':
             "---\nname: design\n---\n\n# design\n\n## 1. 판정\n\n## 연결\n\n## 경계\n"},
     ),
+
+    # ── 셸 가드 머리말 ↔ 본문 ──
+    'shell-guard-header': (
+        {gen_docs.GUARD_SH: _guard_sh(('a-rule', 'b-rule'), ('a-rule', 'b-rule'))},
+        # 머리말은 두 규칙을 선언했는데 본문에 `b-rule` 구현 표시가 없다 = 셸 쪽이 낡았다
+        {gen_docs.GUARD_SH: _guard_sh(('a-rule', 'b-rule'), ('a-rule',))},
+    ),
+
+    # ── 두 매니페스트 version 일치 ──
+    'manifest-version-parity': (
+        _manifests('1.2.3', '1.2.3'),
+        _manifests('1.2.3', '1.2.4'),
+    ),
+
+    # ── topology 빈 키 ↔ pending ──
+    'topology-pending': (
+        {TOPO_REL: json.dumps(_topology(), ensure_ascii=False, indent=2)},
+        # `loads` 키를 통째로 빼면 '아직 안 채움'과 구별되지 않는다
+        {TOPO_REL: json.dumps(_topology(drop='loads'), ensure_ascii=False, indent=2)},
+    ),
+
+    # ── 생성물 ↔ 정본 ──
+    # 픽스처가 **생성기를 돌려** 만든다. 손으로 기대값을 적으면 그 기대값이 또 하나의 사본이 된다.
+    'generated-up-to-date': (
+        _built(),
+        _built(corrupt=True),
+    ),
 }
 
 
@@ -179,11 +300,19 @@ def run_on(files, only):
     """
     root = tempfile.mkdtemp(prefix='lint-fixture-')
     try:
-        for rel, body in files.items():
-            p = os.path.join(root, rel)
-            os.makedirs(os.path.dirname(p), exist_ok=True)
-            with open(p, 'w', encoding='utf-8') as fh:
-                fh.write(body)
+        if callable(files):
+            # 픽스처가 스스로 루트를 채운다 — 생성기를 돌려 만드는 경우가 그렇다.
+            # 기대값을 손으로 적으면 그 기대값이 또 하나의 사본이 되어 같은 병이 생긴다.
+            try:
+                files(root)
+            except Exception as e:
+                return {'_broken': f"픽스처를 만들지 못했다 ({type(e).__name__}: {e})"}
+        else:
+            for rel, body in files.items():
+                p = os.path.join(root, rel)
+                os.makedirs(os.path.dirname(p), exist_ok=True)
+                with open(p, 'w', encoding='utf-8') as fh:
+                    fh.write(body)
         cp = _lint(['--root', root, '--only', only, '--json'])
         if cp.returncode == 2:
             return {'_broken': f"lint.py 가 `{only}` 를 모른다 (exit 2) — "

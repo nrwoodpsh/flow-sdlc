@@ -36,6 +36,7 @@ import re
 import sys
 import traceback
 from difflib import SequenceMatcher
+from fnmatch import fnmatchcase
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -504,6 +505,173 @@ def _section_label(ctx):
             r.targets += 1
             if LABELED.match(l) and '단계' not in l:
                 r.fail(f"번호·라벨 절 {rel}:{i} — {l.strip()[:50]}  (이름만 쓴다)")
+    return r
+
+
+# ── 생성물 ↔ 정본 대조 ──
+# 정본을 JSON 으로 내린 것은 손 동기화를 **없앤** 게 아니라 **검출기가 지키는 관계**로 바꾼 것이다.
+# 검출기 실행이 약속이면 v1 의 병이 데이터 층에서 반복된다 — 그래서 이 검사가 CI 에서 돈다.
+
+@check('generated-up-to-date', '생성물 ↔ 정본 대조',
+       '생성물을 손으로 고치는 것 (설계 "강제 지점" 표 · 리뷰 H3)')
+def _generated_up_to_date(ctx):
+    r = Result(unit='생성 자리')
+    try:
+        import gen_docs
+    except Exception as e:
+        return broken(f"gen-docs 를 불러올 수 없다 — {type(e).__name__}: {e}")
+
+    # 정본이 없는 루트(픽스처 일부)에서는 대상 0건이다 — 통과라고 말하지 않는다
+    if not os.path.exists(os.path.join(ctx.root, gen_docs.GUARD_RULES)):
+        return r
+    try:
+        bad = gen_docs.check(ctx.root)
+    except Exception as e:
+        # 정본을 못 읽으면 생성물이 맞는지 **모른다**. 통과로 세면 안 된다
+        return broken(f"정본을 읽을 수 없어 대조를 못 했다 — {type(e).__name__}: {e}")
+    r.targets = len(gen_docs.BLOCKS) + 2          # 마커 블록들 + 매니페스트 description 둘
+    for x in bad:
+        r.fail(f"생성물 어긋남 — {x}")
+    return r
+
+
+# ── 셸 가드 머리말 ↔ 셸 본문 ──
+# 차단 목록의 정본이 둘로 갈렸다(JSON 단순 규칙 / 셸 예외 로직). 갈라진 대가는 셸 쪽이 낡는 것이고,
+# 그 병만 기계로 막는다 — 머리말이 규칙을 선언하고 본문이 `@rule` 로 표시하면 둘을 대조할 수 있다.
+
+@check('shell-guard-header', '셸 가드 머리말 ↔ 본문',
+       '갈라진 정본 중 셸 쪽이 낡는 것 (설계 "guard 데이터화는 단순 규칙까지다")')
+def _shell_guard_header(ctx):
+    r = Result(unit='셸 규칙')
+    try:
+        import gen_docs
+    except Exception as e:
+        return broken(f"gen-docs 를 불러올 수 없다 — {type(e).__name__}: {e}")
+
+    p = os.path.join(ctx.root, gen_docs.GUARD_SH)
+    if not os.path.exists(p):
+        return r
+    try:
+        _, rules, limits, marks = gen_docs.shell_rules(ctx.root)
+    except ValueError as e:
+        # 형식이 깨진 것은 **문서 위반**이다(검사기 고장이 아니다) — 고칠 사람이 있다
+        r.targets = 1
+        r.fail(f"머리말 형식 {gen_docs.GUARD_SH} — {e}")
+        return r
+
+    declared = [x['id'] for x in rules]
+    r.targets = len(declared) + len(limits)
+    dup = {x for x in declared if declared.count(x) > 1}
+    if dup:
+        r.fail(f"셸 규칙 id 중복 — {', '.join(sorted(dup))}")
+    for rid in declared:
+        if rid not in marks:
+            r.fail(f"머리말에만 있는 셸 규칙 `{rid}` — 본문에 `# @rule {rid}` 표시가 없다 "
+                   f"(구현을 지웠나, 머리말이 낡았나)")
+    for rid in sorted(set(marks)):
+        if rid not in declared:
+            r.fail(f"본문에만 있는 셸 규칙 `{rid}` — 머리말 `@flow-shell-rules` 에 없어서 "
+                   f"문서 차단표에 실리지 않는다")
+    if not limits:
+        r.fail(f"머리말에 `limit:` 줄이 하나도 없다 — v1 은 목록에서 빠진 것을 "
+               f"한계로도 안 적어 문서가 실제 방어보다 넓게 읽혔다 (diag-C 3절)")
+    return r
+
+
+# ── 두 매니페스트의 version 일치 ──
+# 어긋난 채 올리면 **한쪽만 바뀌는데 스크립트는 성공했다고 말한다.** 설치측은 marketplace.json 을
+# 보므로 업데이트가 전달되지 않는다(diag-C 1절). description 은 생성물이라 위 검사가 본다.
+
+@check('manifest-version-parity', '두 매니페스트 version 일치',
+       '어긋난 채 버전을 올리면 설치측에 업데이트가 전달되지 않는다 (diag-C 1절)')
+def _manifest_parity(ctx):
+    r = Result(unit='매니페스트')
+    pj = os.path.join(ctx.root, 'plugins/flow/.claude-plugin/plugin.json')
+    mp = os.path.join(ctx.root, '.claude-plugin/marketplace.json')
+    if not (os.path.exists(pj) and os.path.exists(mp)):
+        return r
+    r.targets = 2
+    try:
+        a = json.loads(ctx.read(pj))
+        b = json.loads(ctx.read(mp))
+    except json.JSONDecodeError as e:
+        r.fail(f"매니페스트 JSON 파싱 실패 — {e}")
+        return r
+    hit = next((x for x in b.get('plugins') or [] if x.get('name') == 'flow'), None)
+    if hit is None:
+        r.fail("marketplace.json 에 name=flow 항목이 없다")
+        return r
+    if a.get('version') != hit.get('version'):
+        r.fail(f"version 어긋남 — plugin.json={a.get('version')} · "
+               f"marketplace.json={hit.get('version')} (`scripts/bump-version.sh` 로 함께 올린다)")
+    if not re.match(r'^\d+\.\d+\.\d+$', str(a.get('version') or '')):
+        r.fail(f"version 이 semver 가 아니다 — {a.get('version')}")
+    return r
+
+
+# ── topology 의 '빈 것'과 '없는 것' ──
+# 다른 층이 아직 안 채운 키를 `null` 로 두는 것과 키가 아예 없는 것은 다르다.
+# 구별할 장치가 없으면 '아직'과 '까먹음'이 같아 보인다 — 그래서 pending 목록과 대조한다.
+TOPO_CMD_KEYS = ('order', 'phase', 'after', 'next', 'entry', 'loads', 'procedures')
+TOPO_ENTRY_KEYS = ('machine', 'content', 'promise')
+
+
+@check('topology-pending', 'topology 빈 키 ↔ pending 목록',
+       "'아직 안 채움'과 '키를 빠뜨림'을 구별한다")
+def _topology_pending(ctx):
+    r = Result(unit='커맨드')
+    p = os.path.join(ctx.root, 'plugins/flow/flow.topology.json')
+    if not os.path.exists(p):
+        return r
+    try:
+        t = json.loads(ctx.read(p))
+    except json.JSONDecodeError as e:
+        r.targets = 1
+        r.fail(f"flow.topology.json 파싱 실패 — {e}")
+        return r
+
+    pending = [str(x) for x in (t.get('pending') or [])]
+
+    def allowed(dotted):
+        return any(fnmatchcase(dotted, pat) for pat in pending)
+
+    cmds = t.get('commands')
+    if not isinstance(cmds, dict) or not cmds:
+        r.targets = 1
+        r.fail("commands 절이 없거나 비었다 — 위상 정본이 비면 게이트가 읽을 것이 없다")
+        return r
+
+    for name, c in cmds.items():
+        r.targets += 1
+        if not isinstance(c, dict):
+            r.fail(f"commands.{name} 이 객체가 아니다")
+            continue
+        for k in TOPO_CMD_KEYS:
+            dotted = f"commands.{name}.{k}"
+            if k not in c:
+                r.fail(f"키가 없다 — {dotted} "
+                       f"(아직 안 채운 것이면 `null` 로 두고 pending 에 적는다. "
+                       f"없는 것과 빈 것을 구별해야 한다)")
+            elif c[k] is None and not allowed(dotted):
+                r.fail(f"`null` 인데 pending 에 없다 — {dotted} "
+                       f"(채우거나 pending 에 적는다)")
+        e = c.get('entry')
+        if isinstance(e, dict):
+            for k in TOPO_ENTRY_KEYS:
+                if k not in e:
+                    r.fail(f"진입 조건 등급이 빠졌다 — commands.{name}.entry.{k} "
+                           f"(없는 등급은 빈 배열로 적는다. 등급을 섞지 않는 것이 이 파일의 일이다)")
+        elif 'entry' in c:
+            r.fail(f"commands.{name}.entry 가 객체가 아니다")
+
+    # pending 이 가리키는 자리가 실제로 있나 — 낡은 pending 은 '아직'을 영구히 정당화한다
+    for pat in pending:
+        if pat.startswith('commands.'):
+            if not any(fnmatchcase(f"commands.{n}.{k}", pat)
+                       for n in cmds for k in TOPO_CMD_KEYS):
+                r.fail(f"pending `{pat}` 이 가리키는 자리가 없다 — 채워졌으면 pending 에서 지운다")
+        elif pat not in t:
+            r.fail(f"pending `{pat}` 이 가리키는 최상위 키가 없다")
     return r
 
 

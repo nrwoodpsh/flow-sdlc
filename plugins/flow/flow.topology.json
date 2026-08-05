@@ -1,0 +1,325 @@
+{
+  "$note": [
+    "파이프라인 위상 · 진입 조건 · 게이트 면제의 **정본**이다.",
+    "  gate-source-write.sh   `gate` 절을 읽어 판정한다 (PreToolUse Write|Edit)",
+    "  guard-danger.sh        Bash 경유 쓰기를 잡으면 같은 게이트에 물어본다",
+    "  commands/*.md 의 연결 절 · next 체인표 · plugin.json description  (생성 — 아직 안 함)",
+    "",
+    "**등급을 섞지 않는다.** 진입 조건은 무엇이 판정하나로 셋으로 갈린다 —",
+    "`machine`(훅이 판정) · `content`(gatekeeper 가 판정) · `promise`(아무 기계도 없다).",
+    "v1 최대 결함이 '게이트를 4곳이 약속하고 실제로 거는 곳은 하나'였다(diag-A 4절).",
+    "약속을 약속이라고 적는 것이 이 파일의 일이다."
+  ],
+  "version": 1,
+
+  "$pending-note": [
+    "**빈 것과 없는 것을 구별한다.** 아래 키는 다른 워커(커맨드·스킬 층)의 산출을 기다리는 중이라",
+    "`null` 로 두었다. 키가 아예 없으면 스키마 위반이고, `null` 이면 '아직'이다 —",
+    "`lint.py` 의 `topology-pending` 검사가 그 둘을 가른다. 채우면 pending 목록에서 지운다."
+  ],
+  "pending": ["commands.*.loads", "commands.*.procedures", "skills"],
+
+  "manifest": {
+    "$note": [
+      "두 매니페스트(plugin.json · marketplace.json)의 `description` 은 **여기서 생성한다.**",
+      "손으로 두 곳을 맞추면 어긋나고, 어긋난 채 버전을 올리면 한쪽만 바뀌는데 스크립트는 성공했다고",
+      "말한다 — 설치측은 marketplace.json 을 보므로 업데이트가 전달되지 않는다(diag-C 1절).",
+      "`scripts/gen_docs.py --write` 가 쓰고 `lint.py` 의 `generated-up-to-date` 가 대조한다."
+    ],
+    "descriptionHead": "개발 라이프사이클 오케스트레이터 — ",
+    "descriptionChain": ["prd", "design", "build", "verify", "review", "sync", "commit"],
+    "descriptionTail": "요구 ID로 잇는 추적 축 + 기계 게이트(Write·Edit 는 훅이 판정) + 되돌릴 수 없는 명령 차단. 어디서 시작할지 모르면 /flow:next."
+  },
+
+  "grades": {
+    "machine": {
+      "누가 판정하나": "PreToolUse 훅이 이 파일을 읽는다",
+      "무엇을 판정할 수 있나": "파일 존재 · 경로 · 형식 · 태그 유무 — 참/거짓이 결정되는 것만",
+      "우회": "Write·Edit 은 못 우회한다. Bash 는 guard 가 닿는 범위까지. MCP 파일 도구는 밖이다"
+    },
+    "content": {
+      "누가 판정하나": "gatekeeper 에이전트 — 진행하는 쪽이 아니다",
+      "무엇을 판정할 수 있나": "내용 충족 여부. 룰로 못 접는 것",
+      "우회": "**발동 자체가 약속이다.** 부르지 않으면 안 돈다 — lint 가 위임 지시 유무를 본다"
+    },
+    "promise": {
+      "누가 판정하나": "아무도. 커맨드 본문이 적어 둔 것뿐이다",
+      "무엇을 판정할 수 있나": "위 둘로 안 되는 것",
+      "우회": "전부. **그래서 표에 약속이라고 적는다**"
+    }
+  },
+
+  "gate": {
+    "$note": [
+      "기계 게이트의 판정 근거다. `gate-source-write.sh` 가 이 절만 읽는다.",
+      "무엇을 요구하나: 소스 파일을 쓰려면 **그 파일을 담은 task 문서**가 있고 거기에 요구 태그가 있어야 한다.",
+      "설계 없이 구현이 앞서가는 것을 막는 것이지, 문서를 많이 쓰게 하는 것이 아니다."
+    ],
+    "enabled": true,
+
+    "workRoot": "doc/01.work",
+    "unitDepth": 2,
+    "$unitDepth-note": "`doc/01.work/{도메인}/{NN.유닛}/` 두 단계다. drift-hook.sh 의 `find -mindepth 2 -maxdepth 2` 와 같은 규칙이어야 한다.",
+
+    "taskDoc": {
+      "globs": ["2.task/*.md", "2.task.md"],
+      "$note": "v1 은 유닛 안에서 `2.task/NN.name.md` 를 쓴다. 작은 유닛의 단일 파일 형태도 받는다."
+    },
+
+    "requirementTag": {
+      "field": "requirement",
+      "placeholderPattern": "\\{\\{",
+      "$note": [
+        "task 템플릿의 frontmatter `requirement: [USER-LOGIN-1]` 이 정본이다.",
+        "**본문에서 ID 모양을 grep 하지 않는다** — `UTF-8`·`ISO-8601` 이 요구 ID 모양과 같아서 오탐이 난다.",
+        "채워지지 않은 템플릿(`{{USER-LOGIN-1}}`)은 태그가 없는 것으로 본다. 그게 실제 상태다."
+      ]
+    },
+
+    "fileMap": {
+      "pattern": "\\[(New|Mod)\\][ \\t]*`?([^`\\s]+)`?",
+      "$note": [
+        "task 템플릿 `## 3. File Map` 의 `- \\`[New] 경로\\` — 역할` 줄이다.",
+        "이게 **소스→유닛 매핑의 정본**이다. 우리가 새로 만든 규약이 아니라 v1 템플릿에 이미 있던 것이다.",
+        "**POSIX 문자 클래스(`[[:space:]]`)를 쓰지 마라** — 읽는 쪽이 python3 `re` 라 `[^`[:space:]]` 가",
+        "`s`·`p`·`a`·`c`·`e` 를 제외하는 클래스로 해석돼 경로를 통째로 못 잡는다. 실제로 그랬다."
+      ]
+    },
+
+    "unitResolution": {
+      "mode": "declared-file-map",
+      "fallback": "any-unit-has-task",
+      "$note": [
+        "`declared-file-map` — File Map 이 이 경로를 적은 task 문서를 찾는다. **유닛 단위로 정확하다.**",
+        "`any-unit-has-task` — File Map 을 쓰는 task 문서가 프로젝트에 하나도 없을 때만 쓰는 바닥이다.",
+        "  이때는 '요구 태그 있는 task 문서가 하나라도 있나'만 본다 — **유닛 단위가 아니다.**",
+        "  거칠지만 필요하다: 레거시에서 옮겨 온 task 문서에 File Map 이 없으면 정확 모드는 전 쓰기를 막고,",
+        "  그러면 사람이 훅을 꺼 버린다(설계가 스스로 적은 실패 경로다). 거친 것을 거칠다고 적고 쓴다."
+      ]
+    },
+
+    "source": {
+      "configKey": "drift.sourceGlobs",
+      "ignoreKey": "drift.ignore",
+      "defaultIgnore": ["**/*.md", "**/*.test.*", "spike/**"],
+      "defaultNonSource": ["doc/", "spike/", ".claude/", ".github/"],
+      "$note": [
+        "소스 판정은 `drift-hook.sh` 의 `is_source` 와 **같은 규칙**이어야 한다.",
+        "① drift.ignore 에 맞으면 소스가 아니다 ② drift.sourceGlobs 가 있으면 그 안만 소스",
+        "③ 없으면 doc/·spike/·.claude/·.github/ 밖이고 .md 가 아닌 것.",
+        "두 훅이 어긋나면 '커밋은 막히는데 쓰기는 통과' 같은 앞뒤가 안 맞는 상태가 된다."
+      ]
+    },
+
+    "exemptions": [
+      {
+        "id": "no-units",
+        "what": "doc/01.work/ 에 유닛이 하나도 없다",
+        "why": "flow 도입 직후다. 그때 전 쓰기를 막으면 프로젝트를 쓸 수 없다 — drift-hook.sh 의 같은 판정을 그대로 쓴다",
+        "source": "diag-C 1절"
+      },
+      {
+        "id": "spike",
+        "what": "spike/ 아래",
+        "why": "버릴 코드다. task 문서가 없는 것이 정상이다",
+        "paths": ["spike/**"]
+      },
+      {
+        "id": "not-source",
+        "what": "소스가 아닌 것 — 문서 · 설정 · 테스트",
+        "why": "게이트가 보는 것은 구현 코드다. 문서를 쓰려면 문서가 있어야 한다는 순환을 만들지 않는다"
+      },
+      {
+        "id": "legacy-exempt",
+        "what": "면제로 표시된 유닛·경로",
+        "why": "레거시에 flow 를 얹는 실전에서만 나오는 규칙이다. v1 이 얻은 것을 그대로 쓴다",
+        "configKey": "gate.legacyExempt",
+        "paths": []
+      },
+      {
+        "id": "flow-own-docs",
+        "what": "doc/ 아래 전부",
+        "why": "not-source 와 겹치지만 따로 적는다 — 게이트가 자기 근거 문서를 막으면 고칠 길이 없다"
+      }
+    ],
+
+    "missingCanon": {
+      "decision": "ask",
+      "$why": [
+        "이 파일을 못 읽으면 게이트는 판정할 근거가 없다. 셋 중 하나를 골라야 한다.",
+        "  fail-closed(전부 차단) — 소스를 한 줄도 못 쓴다. **이 파일을 고치는 것조차 막힌다.**",
+        "    과차단은 사람이 훅을 꺼 버리게 만든다 = 그 층이 영구히 없어진다. 그래서 안 쓴다.",
+        "  fail-open(전부 통과) — guard-danger.sh 는 이걸 쓴다(모든 Bash 가 멈추면 아무 일도 못 하니까).",
+        "    하지만 게이트는 **쓰기 때만** 도는 드문 훅이라, 조용히 통과하면 '게이트가 있다'는 착각만 남는다.",
+        "    v1 이 정확히 그렇게 낡았다 — 아무 말 없이 안 막는 상태.",
+        "  **ask(사람에게 넘김) — 이걸 쓴다.** 막지도 통과시키지도 않고 판단을 사람에게 준다.",
+        "    빈도가 낮아 감당되고, 이유가 화면에 뜨니 고쳐진다.",
+        "flow 프로젝트가 아닐 때(workflow.config.json 없음)는 ask 도 아니고 **조용히 통과**다 —",
+        "남의 프로젝트에서 우리 훅이 말을 걸면 안 된다."
+      ]
+    }
+  },
+
+  "commands": {
+    "setup": {
+      "order": 1, "phase": "도입",
+      "after": [], "next": ["prd", "design"],
+      "entry": {
+        "machine": [],
+        "content": [],
+        "promise": [
+          { "id": "setup-idempotent", "what": "이미 깔린 프로젝트에 두 번 돌려도 덮어쓰지 않는다" }
+        ]
+      },
+      "loads": null, "procedures": null
+    },
+    "next": {
+      "order": 2, "phase": "라우팅",
+      "after": [], "next": ["prd", "design", "build", "verify", "review", "sync", "commit"],
+      "entry": {
+        "machine": [
+          { "id": "has-config", "what": "workflow.config.json 이 있다", "how": "파일 존재" }
+        ],
+        "content": [],
+        "promise": [
+          { "id": "ops-safety", "what": "운영 장애·SOP 는 완화 우선이고 `사람만` 단계를 실행하지 않는다",
+            "why": "v1 ask 1-A·1-D 의 안전 규칙이다. 기계로 판정할 수 없어 약속으로 남는다",
+            "canon": "ops-doc" }
+        ]
+      },
+      "loads": null, "procedures": null
+    },
+    "prd": {
+      "order": 3, "phase": "요구",
+      "after": ["setup"], "next": ["design"],
+      "entry": {
+        "machine": [
+          { "id": "has-config", "what": "workflow.config.json 이 있다", "how": "파일 존재" }
+        ],
+        "content": [
+          { "id": "level-decision", "what": "요구의 레벨(시스템·도메인·기능)이 맞나", "who": "gatekeeper" }
+        ],
+        "promise": [
+          { "id": "append-only", "what": "요구 ID 는 불변·append-only — 번호를 재편하지 않는다", "canon": "traceability" }
+        ]
+      },
+      "loads": null, "procedures": null
+    },
+    "design": {
+      "order": 4, "phase": "설계",
+      "after": ["prd"], "next": ["build", "spike"],
+      "entry": {
+        "machine": [
+          { "id": "requirement-doc-exists", "what": "그 레벨의 요구 문서가 있다", "how": "경로 존재" }
+        ],
+        "content": [
+          { "id": "requirement-covered", "what": "설계가 그 요구를 실제로 덮나", "who": "gatekeeper" }
+        ],
+        "promise": []
+      },
+      "loads": null, "procedures": null
+    },
+    "build": {
+      "order": 5, "phase": "구현",
+      "after": ["design"], "next": ["verify", "review", "sync"],
+      "entry": {
+        "machine": [
+          { "id": "unit-task-doc", "what": "쓰려는 소스를 담은 task 문서가 있다",
+            "how": "gate-source-write.sh — PreToolUse Write|Edit · Bash 경유 쓰기는 guard 가 물어본다" },
+          { "id": "unit-req-tag", "what": "그 task 문서에 요구 태그가 있다",
+            "how": "같음 — frontmatter `requirement:`" }
+        ],
+        "content": [
+          { "id": "contract-followed", "what": "구현이 계약을 따르나", "who": "gatekeeper" }
+        ],
+        "promise": [
+          { "id": "no-self-verify", "what": "구현한 쪽이 자기 검증을 하지 않는다",
+            "why": "LLM 자기확인 편향 방어. 도구 권한으로 일부 갈리지만 호출 자체는 약속이다" }
+        ]
+      },
+      "loads": null, "procedures": null
+    },
+    "verify": {
+      "order": 6, "phase": "검증",
+      "after": ["build"], "next": ["review", "sync"],
+      "entry": {
+        "machine": [
+          { "id": "unit-task-doc", "what": "task 문서가 있다", "how": "경로 존재" }
+        ],
+        "content": [
+          { "id": "coverage-gap", "what": "요구 커버리지에 gap 이 있나", "who": "gatekeeper" }
+        ],
+        "promise": [
+          { "id": "run-not-infer", "what": "테스트를 실제로 돌려 exit code 로 판정한다 — 추론은 검증이 아니다",
+            "canon": "testing" }
+        ]
+      },
+      "loads": null, "procedures": null
+    },
+    "review": {
+      "order": 7, "phase": "리뷰",
+      "after": ["build", "verify"], "next": ["sync"],
+      "entry": {
+        "machine": [],
+        "content": [
+          { "id": "finding-severity", "what": "발견의 severity 판정", "who": "reviewer" }
+        ],
+        "promise": [
+          { "id": "critical-rule-based", "what": "critical 차단은 룰 기반 발견만 — 오탐으로 파이프라인을 멈추지 않는다" }
+        ]
+      },
+      "loads": null, "procedures": null
+    },
+    "sync": {
+      "order": 8, "phase": "수렴",
+      "after": ["build", "verify", "review"], "next": ["commit"],
+      "entry": {
+        "machine": [
+          { "id": "source-changed", "what": "소스 변경이 있다", "how": "git diff" }
+        ],
+        "content": [],
+        "promise": []
+      },
+      "loads": null, "procedures": null
+    },
+    "commit": {
+      "order": 9, "phase": "커밋",
+      "after": ["sync"], "next": [],
+      "entry": {
+        "machine": [
+          { "id": "no-drift", "what": "소스만 바뀌고 문서가 안 온 상태가 아니다",
+            "how": "drift-hook.sh (pre-commit) — 사람 경로에서도 돈다" }
+        ],
+        "content": [],
+        "promise": []
+      },
+      "loads": null, "procedures": null
+    },
+    "spike": {
+      "order": 10, "phase": "검증(버릴 코드)",
+      "after": ["design"], "next": ["design", "build"],
+      "entry": {
+        "machine": [],
+        "content": [],
+        "promise": [
+          { "id": "throwaway", "what": "spike/ 코드는 유지보수 자산이 아니다 — 남기는 것은 ADR·ref 다" }
+        ]
+      },
+      "loads": null, "procedures": null
+    },
+    "publish": {
+      "order": 11, "phase": "발행",
+      "after": ["sync"], "next": [],
+      "entry": {
+        "machine": [],
+        "content": [],
+        "promise": [
+          { "id": "external-confirm", "what": "외부 발행이라 사람 확인 뒤에 실행한다" }
+        ]
+      },
+      "loads": null, "procedures": null
+    }
+  },
+
+  "skills": null
+}

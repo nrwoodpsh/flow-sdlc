@@ -498,4 +498,218 @@ else
   printf '  ⚠ %s\n' "git worktree add 실패 — 폴백 케이스를 건너뜀 (통과로 세지 않는다)"
 fi
 
+# ══════════════════════════════════════════════════════════
+# hooks.json 배선 — **matcher 가 도구 이름이라 어느 훅이 어느 경로를 덮는지가 여기서 정해진다.**
+# 경로가 틀리면 훅이 조용히 안 돈다. 그게 v1 이 앓던 "약속만 있고 기계는 없다"의 배선 판이다.
+# ══════════════════════════════════════════════════════════
+head_ "hooks.json 배선"
+HJ="$FLOW/hooks/hooks.json"
+if [ ! -f "$HJ" ]; then
+  no_ "hooks.json 이 없다 — 훅이 하나도 안 걸린다"
+else
+  python3 -c 'import json,sys; json.load(open(sys.argv[1],encoding="utf-8"))' "$HJ" \
+    && ok_ "hooks.json JSON 파싱" || no_ "hooks.json JSON 파싱 실패"
+  # 걸린 스크립트가 실제로 있나 — ${CLAUDE_PLUGIN_ROOT} 를 플러그인 폴더로 바꿔 본다
+  miss=$(python3 - "$HJ" "$FLOW" <<'PY'
+import json, os, sys
+d = json.load(open(sys.argv[1], encoding='utf-8'))
+root = sys.argv[2]
+bad = []
+for ev, groups in (d.get('hooks') or {}).items():
+    for gidx, gr in enumerate(groups or []):
+        for h in gr.get('hooks') or []:
+            cmd = (h.get('command') or '').strip('"')
+            p = cmd.replace('${CLAUDE_PLUGIN_ROOT}', root).strip('"')
+            if not os.path.exists(p):
+                bad.append(f"{ev}[{gidx}] → {cmd}")
+print('\n'.join(bad))
+PY
+)
+  [ -z "$miss" ] && ok_ "걸린 스크립트가 모두 존재" || no_ "hooks.json 이 없는 스크립트를 가리킨다" "$miss"
+  # 세 경로가 다 걸렸나. 하나라도 빠지면 그 경로가 통째로 무방비다
+  for want in check-drift-hook guard-danger gate-source-write; do
+    grep -q "$want" "$HJ" && ok_ "배선 — $want" || no_ "배선에 $want 가 없다"
+  done
+  grep -q '"matcher": *"Bash"' "$HJ" && ok_ "matcher Bash" || no_ "matcher Bash 가 없다"
+  grep -qE '"matcher": *"[^"]*Write' "$HJ" && ok_ "matcher Write 계열" || no_ "matcher Write 가 없다"
+fi
+
+# ══════════════════════════════════════════════════════════
+# gate-source-write.sh — 소스 쓰기 게이트
+# **과차단을 더 무서워한다.** 면제가 안 먹으면 사람이 훅을 꺼 버리고, 그러면 그 층이 영구히 없어진다.
+# 그래서 면제(spike/ · 유닛 없음 · 소스 아님)를 차단 케이스보다 먼저·많이 본다.
+# ══════════════════════════════════════════════════════════
+head_ "gate-source-write.sh — 뼈대"
+GT="$FLOW/hooks/scripts/gate-source-write.sh"
+TOPO="$FLOW/flow.topology.json"
+bash -n "$GT" && ok_ "문법" || no_ "문법"
+[ -f "$TOPO" ] && ok_ "판정 근거 정본 존재" || no_ "flow.topology.json 이 없다"
+python3 -c 'import json,sys
+d=json.load(open(sys.argv[1],encoding="utf-8"))
+g=d.get("gate") or {}
+assert g.get("exemptions"), "gate.exemptions 가 없다"
+ids={e.get("id") for e in g["exemptions"]}
+for need in ("no-units","spike","legacy-exempt"):
+    assert need in ids, f"면제 {need} 가 없다"
+assert g.get("missingCanon",{}).get("decision"), "missingCanon.decision 이 없다"' "$TOPO" \
+  && ok_ "gate 절 — 면제 셋 + 정본 부재 판정" || no_ "gate 절이 불완전하다"
+
+# 프로젝트 픽스처를 만든다. <디렉터리> <유닛?> <task?> <FileMap 경로|-> <요구태그?>
+mkproj_() {
+  local d="$1" unit="$2" task="$3" fmpath="$4" tag="$5"
+  mkdir -p "$d"
+  printf '{}\n' > "$d/workflow.config.json"
+  if [ "$unit" = yes ]; then
+    mkdir -p "$d/doc/01.work/user/00.login"
+    echo seed > "$d/doc/01.work/user/00.login/.keep"
+  fi
+  if [ "$task" = yes ]; then
+    mkdir -p "$d/doc/01.work/user/00.login/2.task"
+    {
+      echo '---'
+      if [ "$tag" = yes ]; then echo 'requirement: [USER-LOGIN-1]'
+      else echo 'requirement: [{{USER-LOGIN-1}}]'; fi
+      echo '---'
+      echo ''
+      echo '## 3. File Map'
+      echo ''
+      [ "$fmpath" != '-' ] && echo "- \`[New] $fmpath\` — 로그인 API"
+    } > "$d/doc/01.work/user/00.login/2.task/00.login.md"
+  fi
+}
+
+# gt <기대: 차단|확인|통과> <경로> <프로젝트> [설명]
+gt() {
+  local rc
+  bash "$GT" --path "$2" --root "$3" >/dev/null 2>&1; rc=$?
+  local got
+  case "$rc" in 0) got=통과 ;; 2) got=차단 ;; 3) got=확인 ;; *) got="이상($rc)" ;; esac
+  eq_ "$1" "$got" "${4:-$2}"
+}
+
+head_ "게이트 면제 — 유닛이 하나도 없으면 검사를 안 켠다"
+P0="$TMP/gate-nounit"; mkproj_ "$P0" no no - no
+gt 통과 "src/a.ts"   "$P0" "유닛 없음 · 소스"
+gt 통과 "src/deep/b.ts" "$P0" "유닛 없음 · 하위 소스"
+gt 통과 "spike/x.ts" "$P0" "유닛 없음 · spike"
+
+head_ "게이트 — 유닛은 있고 task 문서가 없다"
+P1="$TMP/gate-notask"; mkproj_ "$P1" yes no - no
+gt 차단 "src/a.ts"   "$P1" "task 문서 없이 소스를 쓴다"
+gt 통과 "spike/x.ts" "$P1" "spike/ 면제"
+gt 통과 "spike/deep/y.ts" "$P1" "spike/ 하위 면제"
+gt 통과 "README.md"  "$P1" "소스 아님 — .md"
+gt 통과 "doc/01.work/user/00.login/2.task/00.a.md" "$P1" "소스 아님 — 문서"
+gt 통과 "src/a.test.ts" "$P1" "소스 아님 — 테스트"
+
+head_ "게이트 — task 문서가 그 경로를 담았나 (File Map)"
+P2="$TMP/gate-declared"; mkproj_ "$P2" yes yes "src/a.ts" yes
+gt 통과 "src/a.ts" "$P2" "File Map 이 담은 경로"
+gt 차단 "src/b.ts" "$P2" "File Map 에 없는 경로"
+gt 통과 "spike/a.ts" "$P2" "spike 면제는 그대로"
+
+head_ "게이트 — 요구 태그가 템플릿 그대로면 태그가 없는 것이다"
+P3="$TMP/gate-notag"; mkproj_ "$P3" yes yes "src/a.ts" no
+gt 차단 "src/a.ts" "$P3" "requirement 가 {{…}} 다"
+
+head_ "게이트 — File Map 이 없는 task 문서 (거친 바닥)"
+P4="$TMP/gate-fallback"; mkproj_ "$P4" yes yes - yes
+gt 통과 "src/a.ts" "$P4" "요구 태그가 있으면 거친 판정으로 통과"
+P5="$TMP/gate-fallback-notag"; mkproj_ "$P5" yes yes - no
+gt 차단 "src/a.ts" "$P5" "요구 태그도 없으면 차단"
+
+head_ "게이트 — 레거시 면제는 config 로도 늘린다"
+P6="$TMP/gate-legacy"; mkproj_ "$P6" yes no - no
+printf '{"gate":{"legacyExempt":["legacy/**"]}}\n' > "$P6/workflow.config.json"
+gt 차단 "src/a.ts"        "$P6" "면제 밖"
+gt 통과 "legacy/old.ts"   "$P6" "면제 안"
+gt 통과 "legacy/deep/x.ts" "$P6" "면제 안 · 하위"
+
+head_ "게이트 — 판정 근거가 없을 때 (fail-open 도 fail-closed 도 아니다)"
+gtc() {  # <기대> <설명> <FLOW_TOPOLOGY 값>
+  local rc
+  FLOW_TOPOLOGY="$3" bash "$GT" --path src/a.ts --root "$P1" >/dev/null 2>&1; rc=$?
+  local got; case "$rc" in 0) got=통과 ;; 2) got=차단 ;; 3) got=확인 ;; *) got="이상($rc)" ;; esac
+  eq_ "$1" "$got" "$2"
+}
+gtc 확인 "정본 없음 → 사람에게 넘긴다(ask)"       "$TMP/no-such-topology.json"
+printf '{ this is not json' > "$TMP/broken-topo.json"
+gtc 확인 "정본이 깨졌음 → ask"                     "$TMP/broken-topo.json"
+printf '{"version":1}' > "$TMP/no-gate.json"
+gtc 확인 "gate 절이 없음 → ask"                    "$TMP/no-gate.json"
+# flow 프로젝트가 아니면 ask 도 아니고 침묵이다 — 남의 프로젝트에서 말을 걸지 않는다
+NP="$TMP/not-flow"; mkdir -p "$NP"
+gt 통과 "src/a.ts" "$NP" "flow 프로젝트가 아니다 → 조용히 통과"
+nfout=$(bash "$GT" --path src/a.ts --root "$NP" 2>&1)
+[ -z "$nfout" ] && ok_ "  └ 아무 말도 안 한다" || no_ "  └ 남의 프로젝트에서 말을 걸었다" "$nfout"
+
+head_ "게이트 — 훅 모드 (PreToolUse Write·Edit 의 stdin JSON)"
+hgt() {  # <기대> <절대경로> <프로젝트> <설명>
+  local rc out
+  out=$(hook_json_ tool_input.file_path "$2" | (cd "$3" && CLAUDE_PROJECT_DIR="$3" bash "$GT" 2>&1)); rc=$?
+  local got
+  if [ "$rc" -eq 2 ]; then got=차단
+  elif printf '%s' "$out" | grep -q '"permissionDecision"[[:space:]]*:[[:space:]]*"ask"'; then got=확인
+  else got=통과; fi
+  eq_ "$1" "$got" "$4"
+}
+hgt 차단 "$P2/src/b.ts"   "$P2" "Write src/b.ts (절대 경로)"
+hgt 통과 "$P2/src/a.ts"   "$P2" "Write src/a.ts (File Map 이 담았다)"
+hgt 통과 "$P2/spike/z.ts" "$P2" "Write spike/z.ts"
+hgt 차단 "src/b.ts"       "$P2" "상대 경로도 받는다 (프로젝트 루트 기준)"
+# 빈 입력·경로 없는 입력에 죽지 않는다 (훅이 죽으면 그 도구가 통째로 막힌다)
+echo '{}' | bash "$GT" >/dev/null 2>&1 && ok_ "빈 입력에 통과" || no_ "빈 입력에 죽었다"
+echo 'not json' | bash "$GT" >/dev/null 2>&1 && ok_ "깨진 입력에 통과" || no_ "깨진 입력에 죽었다"
+
+# ══════════════════════════════════════════════════════════
+# Bash 경유 쓰기 — matcher 가 도구 이름이라 Write·Edit 훅이 아예 안 보는 경로다.
+# 추출이 틀리면 게이트가 아무리 맞아도 이 경로가 통째로 새는데 **판정 결과로는 안 보인다.**
+# ══════════════════════════════════════════════════════════
+head_ "Bash 경유 쓰기 — 대상 추출"
+wt() {  # <기대(쉼표로 이은 것)> <명령>
+  local got
+  got=$(bash "$S" --dump-write-targets "$2" 2>/dev/null | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
+  eq_ "$1" "$got" "$(printf '%s' "$2" | tr '\n' ' ')"
+}
+wt "src/a.ts"           'cat x > src/a.ts'
+wt "src/a.ts"           'echo hi >> src/a.ts'
+wt "src/a.ts"           'cat x>src/a.ts'
+wt "src/a.ts"           'tee src/a.ts'
+wt "src/a.ts"           'cat x | tee src/a.ts'
+# 표현식(`s/x/y/`)까지 딸려 나오는 것은 **의도다** — 게이트가 소스 아닌 것을 걸러 주므로
+# 더 뽑는 것은 무해하고, 덜 뽑는 것은 구멍이다. 그 판단을 케이스로 박아 둔다.
+wt "s/x/y/,src/a.ts"    'sed -i "" -e s/x/y/ src/a.ts'
+wt "s/x/y/,src/a.ts"    'gsed -i s/x/y/ src/a.ts'
+wt "/dev/null"          'echo a > /dev/null'
+wt ""                   'npm test 2>&1'
+wt ""                   'git status'
+wt ""                   'echo "a > b"'
+wt ""                   'sed s/x/y/ src/a.ts'
+wt "src/a.ts"           'cat <<EOF > src/a.ts
+x
+EOF'
+
+head_ "Bash 경유 쓰기 — 게이트에 넘긴다 (guard → gate)"
+bw() {  # <기대> <명령> <프로젝트>
+  local out rc got
+  out=$(hook_json_ tool_input.command "$2" | (cd "$3" && CLAUDE_PROJECT_DIR="$3" bash "$S" 2>&1)); rc=$?
+  if [ "$rc" -eq 2 ]; then got=차단
+  elif printf '%s' "$out" | grep -q '"permissionDecision"[[:space:]]*:[[:space:]]*"ask"'; then got=확인
+  else got=통과; fi
+  eq_ "$1" "$got" "$2"
+}
+bw 통과 'cat x > src/a.ts'          "$P2"
+bw 차단 'cat x > src/b.ts'          "$P2"
+bw 차단 'echo hi >> src/nope.ts'    "$P2"
+bw 차단 'tee src/b.ts'              "$P2"
+bw 차단 'sed -i "" s/x/y/ src/b.ts' "$P2"
+bw 통과 'echo x > spike/z.ts'       "$P2"
+bw 통과 'echo x > README.md'        "$P2"
+bw 통과 'npm test 2>&1'             "$P2"
+bw 통과 'cat src/b.ts'              "$P2"
+# 유닛이 없으면 이 경로도 안 켜진다 — 두 훅이 같은 면제를 쓴다
+bw 통과 'cat x > src/b.ts'          "$P0"
+# 되돌릴 수 없는 명령 차단은 그대로다 (게이트가 얹혀도 안 가려진다)
+bw 차단 'git push'                  "$P2"
+
 summary_ "flow 훅"

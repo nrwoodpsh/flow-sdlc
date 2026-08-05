@@ -1,0 +1,65 @@
+# ─────────────────────────────────────────────────────────────
+# 이 리포의 CI — **`.example` 가 아니다. 우회 불가한 기계다.**
+# ─────────────────────────────────────────────────────────────
+# v1 은 드리프트 게이트를 `.example` 옵트인으로 뒀고, 그게 AI 경로가 1겹이던 이유다
+# (`doc/00.diagnosis/diag-C-infra.md` 3절). 이 리포에서는 필수로 돈다.
+#
+# **사용자 프로젝트에 주는 CI 는 여전히 옵트인이다**
+# (`plugins/flow/project-template/.github/workflows/drift-gate.yml.example`).
+# 켜는 것은 그 프로젝트의 선택이고, 안 켠 프로젝트에는 그 층이 없다 —
+# **옵트인을 기계라고 적지 않는다.** 두 이야기를 섞지 마라.
+#
+# 왜 이 넷인가 (`doc/01.architecture.md` 의 "강제 지점" 표)
+#   lint.py         생성물이 정본과 어긋나는 것 · 문서가 깨지는 것
+#   lint.test.py    **검사가 사문화된 것** — 위반 픽스처가 통과하면 실패한다
+#   hooks.test.sh   훅이 조용히 안 막는 것 · 차단 목록과 케이스가 어긋나는 것
+#   gen_docs --check  생성물을 손으로 고친 것 (lint 도 보지만 메시지가 더 직접적이다)
+#   bump-version --check  두 매니페스트가 어긋난 것
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # 훅의 JSON 로더가 셋(python3·node·perl)이고 **한 번에 도는 것은 하나**다.
+      # 나머지 둘은 테스트가 직접 부르지 않으면 조용히 썩는다 — 실제로 그랬다.
+      # node 가 있어야 hooks.test.sh 가 세 로더 대조와 훅↔CI 나란히 판정을 돌린다.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 도구 확인 (건너뜀을 통과로 세지 않기 위해)
+        run: |
+          for t in bash python3 node perl awk sed grep git; do
+            command -v "$t" >/dev/null || { echo "::error::$t 가 없다"; exit 1; }
+          done
+          bash --version | head -1
+
+      # 검사기 자기 테스트가 **먼저**다. 검사기가 사문화된 상태에서 lint 가 통과하는 것은
+      # 아무 뜻이 없다 — v1 이 정확히 그 상태였다(전부 통과 + 사문화된 검사 하나).
+      - name: 검사기 자기 테스트
+        run: python3 scripts/lint.test.py
+
+      - name: 문서 정합
+        run: python3 scripts/lint.py
+
+      - name: 생성물 ↔ 정본
+        run: python3 scripts/gen_docs.py --check
+
+      - name: 매니페스트 대조
+        run: bash scripts/bump-version.sh --check
+
+      - name: 훅 테스트
+        run: bash scripts/tests/hooks.test.sh

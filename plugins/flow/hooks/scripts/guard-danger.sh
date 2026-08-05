@@ -23,6 +23,28 @@
 #
 # 우회 수단을 두지 않는다 — 환경변수로 열면 AI가 그걸 설정해 통과한다.
 # 사람이 해야 하는 일이면 사람이 자기 터미널에서 한다(훅은 Claude Code 세션에만 걸린다).
+#
+# ── 셸에 남은 규칙 (JSON 으로 못 내리는 것) ───────────────────────
+# 아래 블록은 **기계가 읽는 고정 형식**이다. `scripts/gen_docs.py` 가 긁어 문서 차단표의
+# `셸 정본` 절을 만들고, `scripts/lint.py` 의 `shell-guard-header` 검사가
+# 이 머리말과 셸 본문의 `@rule` 표시를 대조한다. **한쪽만 고치면 CI 가 실패한다.**
+# 갈라진 정본 중 셸 쪽이 낡는 것이 diag-C 4절이 말한 그 병이라, 그 병만 기계로 막는다.
+#
+# 형식 — 줄 하나에 필드를 ` | ` 로 잇는다. 필드 수가 다르면 lint 가 실패한다.
+#   `# rule:  <id> | <등급> | <무엇을 막나> | <왜 JSON 이 아니라 셸에 있나>`
+#   `# limit: <못 막는 것> | <왜>`
+#
+# @flow-shell-rules v1
+# rule: bash-write-redirect | block | `>` · `>>` 로 소스 파일에 쓰는 것 | 리다이렉션 대상은 토크나이저가 세그먼트 경계로 써서 버린다 — 명령 이름 목록으로 표현할 수 없다
+# rule: bash-write-command | block | `tee` · `sed -i` 계열로 소스 파일을 고치는 것 | 어느 인자가 파일인지가 명령마다 달라 인자 해석이 필요하다
+# limit: `python -c "open('src/a.ts','w')"` | 경로가 코드 안에 있어 셸이 알 수 없다
+# limit: `eval` · 변수로 쪼갠 경로 · 스크립트 파일에 써서 실행 | 셸을 해석해야 한다. 훅이 할 일이 아니다
+# limit: MCP 파일 도구 | matcher 가 도구 이름이라 훅이 아예 안 돈다
+# limit: 사람이 편집기로 고치는 것 | 훅은 Claude Code 세션에만 걸린다
+# @flow-shell-rules-end
+#
+# 위 둘은 **스스로 판정하지 않는다.** 쓰기 대상 경로를 뽑아 `gate-source-write.sh` 에 물어본다 —
+# 게이트 조건이 두 곳에 생기면 Write·Edit 경로와 Bash 경로의 판정이 어긋난다.
 set -uo pipefail
 
 # --- 훅 입력 JSON에서 값 꺼내기 (node → python3 → perl) ---
@@ -166,8 +188,16 @@ if [ "${1:-}" = --dump-rules ]; then
 fi
 
 # stdin 은 덤프 문을 지난 뒤에 읽는다 — 덤프는 훅 입력 없이 부른다.
-input=$(cat)
-cmd=$(json_get "$input" tool_input.command)
+# `--dump-write-targets <명령>` 도 같은 이유로 argv 다. 쓰기 대상 추출만 떼어 보여 준다 —
+# 추출이 틀리면 게이트가 아무리 맞아도 Bash 경로가 통째로 새는데, 판정 결과로는 안 보인다.
+DUMP_WT=
+if [ "${1:-}" = --dump-write-targets ]; then
+  DUMP_WT=1
+  cmd="${2:-}"
+else
+  input=$(cat)
+  cmd=$(json_get "$input" tool_input.command)
+fi
 [ -n "$cmd" ] || exit 0
 
 flat=$(printf '%s' "$cmd" | tr '\n' ' ' | tr -s ' ')
@@ -200,13 +230,17 @@ EOF
 #   SB — 인용 안 내용을 공백으로 바꾼 세그먼트. **명령을 찾는다.**
 #   SU — 인용 기호만 뗀 세그먼트. **플래그 값을 본다** (`-X \'POST\'`).
 # 플래그를 명령 전체에서 찾으면 다른 세그먼트의 `-f` 가 얹혀 과차단이 난다 — 세그먼트별로 본다.
-SB=() ; SU=() ; b= ; u=
+SB=() ; SU=() ; SP_=() ; b= ; u= ; pre=
 # `${b//[[:space:]]/}` 는 bash 3.2(macOS 기본)에서 2차식이다 — 긴 명령에서 수 초 걸렸다
-push_seg() { case "$b" in *[![:space:]]*) SB+=("$b"); SU+=("$u") ;; esac; b= ; u= ; }
+#
+# `SP_[i]` 는 **그 세그먼트 앞에 무엇이 있었나**다. `>` 면 이 세그먼트가 리다이렉션 대상이다.
+# 토크나이저는 `>` 를 세그먼트 경계로 쓰고 버리므로, 버리기 전에 표시만 남긴다 —
+# 세그먼트를 나누는 방식은 v1 그대로다(케이스가 그것에 박혀 있다).
+push_seg() { case "$b" in *[![:space:]]*) SB+=("$b"); SU+=("$u"); SP_+=("$pre") ;; esac; b= ; u= ; pre= ; }
 
 scan() {
   local s=$1 i c n q=
-  b= ; u=
+  b= ; u= ; pre=
   for (( i=0; i<${#s}; i++ )); do
     c=${s:i:1}
     if [ -n "$q" ]; then
@@ -224,7 +258,9 @@ scan() {
       "'"|'"') q=$c ;;
       '\') n=${s:i+1:1}; i=$((i+1))
            [ "$n" = $'\n' ] || { b+="$n"; u+="$n"; } ;;   # 줄이음(`\`+개행)은 접는다
-      ';'|'&'|'|'|'('|')'|'{'|'}'|'`'|'<'|'>'|$'\n') push_seg ;;
+      ';'|'&'|'|'|'('|')'|'{'|'}'|'`'|'<'|$'\n') push_seg ;;
+      # `>` 도 v1 과 똑같이 경계다. 다른 것은 **다음 세그먼트에 표시를 남기는 것**뿐이다.
+      '>') push_seg ; pre='>' ;;
       *) b+=$c ; u+=$c ;;
     esac
   done
@@ -288,6 +324,100 @@ while [ "$i" -lt "${#SB[@]}" ]; do
   pl=$(shell_payload "${SU[$i]}") && [ -n "$pl" ] && [ "$pl" != "${SU[$i]}" ] && scan "$pl"
   i=$((i+1))
 done
+
+# ── 쓰기 대상 뽑기 — 게이트 훅이 못 보는 경로를 게이트에 넘긴다 ──────
+# `PreToolUse` 의 matcher 는 도구 이름이라 `Write`·`Edit` 훅은 `cat > src/a.ts` 를 아예 못 본다.
+# 여기서 대상 경로만 뽑아 **같은 게이트**에 물어본다 — 조건을 두 번 적으면 두 판정이 어긋난다.
+#
+# 파일을 쓰는 명령 목록. 늘리는 비용이 한 줄이다.
+#   `<이름> <반드시 있어야 하는 플래그 정규식(없으면 -)>`
+# JSON 이 아니라 여기 있는 이유는 머리말 `@flow-shell-rules` 에 적었다 —
+# 어느 인자가 파일인지가 명령마다 달라서 목록만으로 안 된다.
+WRITE_CMDS='tee -
+sed (^|[[:space:]])-i([^a-zA-Z]|$)
+perl (^|[[:space:]])-[a-zA-Z]*i[a-zA-Z]*([[:space:]]|$)
+gsed (^|[[:space:]])-i([^a-zA-Z]|$)'
+
+seg_writer() {   # $1 = 세그먼트(SB) → 파일을 쓰는 명령이면 WREST 에 그 뒤를 담는다
+  local s=$1 tok base name flag
+  while [ -n "$s" ]; do
+    s=${s#"${s%%[![:space:]]*}"}; [ -n "$s" ] || break
+    tok=${s%%[[:space:]]*}; s=${s#"$tok"}
+    base=$(printf '%s' "${tok##*/}" | tr 'A-Z' 'a-z')
+    while IFS=' ' read -r name flag; do
+      [ -n "$name" ] || continue
+      [ "$base" = "$name" ] || continue
+      if [ "$flag" = '-' ] || printf '%s' "$s" | grep -qE -- "$flag"; then
+        WREST=$s; WCMD=$base; return 0
+      fi
+    done <<EOF
+$WRITE_CMDS
+EOF
+  done
+  return 1
+}
+
+# 플래그가 아닌 낱말만. **넉넉히 뽑는다** — 게이트가 소스 아닌 것을 걸러 주므로
+# 더 뽑는 것은 무해하고, 덜 뽑는 것은 구멍이다(`sed -e 's/x/y/' f` 의 표현식은 게이트가 통과시킨다).
+plain_words() {
+  local s=$1 tok out=
+  while [ -n "$s" ]; do
+    s=${s#"${s%%[![:space:]]*}"}; [ -n "$s" ] || break
+    tok=${s%%[[:space:]]*}; s=${s#"$tok"}
+    case "$tok" in -*) ;; *) out="$out
+$tok" ;; esac
+  done
+  printf '%s' "${out#
+}"
+}
+
+write_targets() {   # 쓰기 대상 후보를 한 줄에 하나씩
+  local i=0 t
+  while [ "$i" -lt "${#SB[@]}" ]; do
+    # @rule bash-write-redirect
+    if [ "${SP_[$i]}" = '>' ]; then
+      t=${SU[$i]}
+      t=${t#"${t%%[![:space:]]*}"}
+      t=${t%%[[:space:]]*}
+      # `2>&1` 의 `&1` 이나 `/dev/null` 은 게이트가 걸러 준다 — 여기서 판정하지 않는다
+      [ -n "$t" ] && printf '%s\n' "$t"
+    fi
+    # @rule bash-write-command
+    WREST= ; WCMD=
+    if seg_writer "${SB[$i]}"; then
+      plain_words "$WREST"
+      printf '\n'
+    fi
+    i=$((i+1))
+  done
+}
+
+if [ -n "$DUMP_WT" ]; then
+  write_targets
+  exit 0
+fi
+
+# 게이트에 물어본다. 게이트가 없으면(설치가 덜 됐다) **조용히 넘긴다** —
+# 여기서 막으면 가드가 게이트의 고장까지 떠안아 모든 Bash 가 멈춘다.
+GATE="${FLOW_GATE:-$here/gate-source-write.sh}"
+if [ -f "$GATE" ]; then
+  while IFS= read -r wt; do
+    [ -n "$wt" ] || continue
+    grc=0
+    gout=$(FLOW_TOPOLOGY="${FLOW_TOPOLOGY:-}" bash "$GATE" --path "$wt" 2>&1) || grc=$?
+    case "$grc" in
+      2) echo "" 1>&2
+         echo "⛔ flow guard: Bash 로 소스 파일에 쓰려 했습니다 — 게이트가 막았습니다." 1>&2
+         echo "   명령: $flat" 1>&2
+         printf '%s\n' "$gout" 1>&2
+         exit 2 ;;
+      3) ask "Bash 경유 쓰기 ($wt)" "게이트 판정 근거를 확인하세요." \
+            "$(printf '%s' "$gout" | tr -d '\n')" ;;
+    esac
+  done <<EOF
+$(write_targets)
+EOF
+fi
 
 words() {   # 옵션(과 값을 먹는 것의 값)을 빼고 낱말만
   local s=$1 tok out=

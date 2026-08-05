@@ -1,0 +1,44 @@
+{
+  "$note": [
+    "훅 배선. **matcher 는 도구 이름이다** — 그래서 어느 훅이 어느 경로를 덮는지가 여기서 결정된다.",
+    "  SessionStart          drift 훅이 실제로 도는 상태인가 알린다 (막지 않는다)",
+    "  PreToolUse / Bash     되돌릴 수 없는 명령 차단 + Bash 경유 소스 쓰기를 게이트에 넘김",
+    "  PreToolUse / 쓰기도구  소스 파일을 쓰기 전에 task 문서·요구 태그 확인",
+    "",
+    "**MCP 파일 도구는 어느 matcher 에도 안 걸린다.** 한계로 적는다 —",
+    "guard-danger.sh 머리말의 @flow-shell-rules 블록과 guard-rules.json 의 limits 가 정본이다.",
+    "여기에 도구를 더 적어도 MCP 는 안 걸린다. 이름을 모르기 때문이다."
+  ],
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/check-drift-hook.sh\""
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/guard-danger.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/gate-source-write.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}
