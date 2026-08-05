@@ -1,0 +1,496 @@
+{
+  "$schema-note": [
+    "차단 목록의 **정본**이다. 이 파일 하나만 고친다.",
+    "  guard-danger.sh   이 파일을 읽어 판정한다 (case 문에 열거하지 않는다)",
+    "  hooks.test.sh     expect 를 읽어 케이스를 만든다 (손으로 적지 않는다)",
+    "  README·CLAUDE.md  차단표를 이 파일에서 생성한다",
+    "v1 은 같은 목록이 셸 case 문 + 산문 5곳에 복제되어 하나 늘리는 비용이 9곳이었다.",
+    "그래서 아무도 안 늘렸고 미탐 9건이 남았다 (diag-C 4절).",
+    "",
+    "규칙 하나 늘리는 법: rules 에 한 줄, expect 에 최소 한 줄. 그게 전부다.",
+    "expect 가 없는 규칙은 테스트가 실패시킨다 — 목록과 테스트가 어긋날 수 없다."
+  ],
+  "version": 1,
+
+  "classes": {
+    "irreversible": {
+      "level": "block",
+      "뜻": "되돌릴 수 없다 — 실행하면 복구 경로가 없거나 사람 손이 필요하다",
+      "v1": "이 등급만 있었다"
+    },
+    "defense-off": {
+      "level": "block",
+      "뜻": "다른 방어 층을 끈다 — AI 가 스스로 감시를 벗는 길이다",
+      "v1": "없었다. diag-C 3절 실측 미탐 — --no-verify · -c core.hooksPath="
+    },
+    "external-state": {
+      "level": "block",
+      "뜻": "우리 저장소 밖에 상태를 만든다 — 남이 보고 반응한다",
+      "v1": "없었다. diag-C 3절 실측 미탐 — gh pr/issue/repo create · workflow run"
+    },
+    "judgement": {
+      "level": "ask",
+      "뜻": "판단이 갈린다 — 정상 작업일 때가 있어서 무조건 막으면 사람이 훅을 끈다",
+      "v1": "없었다. 등급이 하나라 '막거나 안 보거나' 둘뿐이었다"
+    }
+  },
+
+  "rules": [
+    {
+      "id": "git-push",
+      "tool": "git", "words": "push", "class": "irreversible", "level": "block",
+      "unless": "(^|[[:space:]])--dry-run([[:space:]]|$)",
+      "label": "git push",
+      "why": "원격 이력이 바뀐다 — 되돌리려면 남이 이미 받아 간 것을 고쳐야 한다.",
+      "advice": "push·merge는 사람이 외부 툴로 합니다(Sourcetree 등). 커밋까지는 /flow:commit 이 합니다.",
+      "note": "`-n` 은 보지 않는다 — `nice -n 10 git push` 의 `-n` 이 얹힌다. `--dry-run` 만 예외다."
+    },
+    {
+      "id": "git-merge",
+      "tool": "git", "words": "merge", "class": "irreversible", "level": "block",
+      "unless": "(^|[[:space:]])--(abort|quit)([[:space:]]|$)",
+      "label": "git merge",
+      "why": "충돌 판단과 이력 결정이 사람 몫이다.",
+      "advice": "머지는 사람이 합니다 — 충돌 판단과 이력 결정이 사람 몫입니다.",
+      "note": "`--abort`·`--quit` 은 빠져나오는 것이라 통과. `--continue` 는 막는다 — 머지를 완료하고 이력을 다시 쓴다."
+    },
+    {
+      "id": "git-rebase",
+      "tool": "git", "words": "rebase", "class": "irreversible", "level": "block",
+      "unless": "(^|[[:space:]])--(abort|quit|skip|show-current-patch)([[:space:]]|$)",
+      "label": "git rebase",
+      "why": "커밋 해시가 전부 바뀐다 — 이미 공유된 이력이면 되돌릴 수 없다.",
+      "advice": "이력을 바꿉니다. 사람이 직접 하세요."
+    },
+    {
+      "id": "git-filter-branch",
+      "tool": "git", "words": "filter-branch", "class": "irreversible", "level": "block",
+      "label": "git filter-branch",
+      "why": "이력 전체를 다시 쓴다.",
+      "advice": "이력을 파괴합니다. 사람이 직접 하세요."
+    },
+    {
+      "id": "git-filter-repo",
+      "tool": "git", "words": "filter-repo", "class": "irreversible", "level": "block",
+      "label": "git filter-repo",
+      "why": "이력 전체를 다시 쓴다.",
+      "advice": "이력을 파괴합니다. 사람이 직접 하세요."
+    },
+    {
+      "id": "git-reset-hard",
+      "tool": "git", "words": "reset", "class": "irreversible", "level": "block",
+      "when": "(^|[[:space:]])--hard([[:space:]]|=|$)",
+      "label": "git reset --hard",
+      "why": "커밋되지 않은 변경은 어디에도 남지 않는다.",
+      "advice": "커밋되지 않은 변경이 사라집니다. 되돌릴 수 없습니다."
+    },
+    {
+      "id": "git-clean-force",
+      "tool": "git", "words": "clean", "class": "irreversible", "level": "block",
+      "when": "(^|[[:space:]])(--force|-[a-zA-Z]*f[a-zA-Z]*)([[:space:]]|$)",
+      "label": "git clean -f",
+      "why": "추적되지 않는 파일은 git 이 사본을 갖고 있지 않다.",
+      "advice": "추적되지 않는 파일이 사라집니다. 되돌릴 수 없습니다."
+    },
+    {
+      "id": "git-pull-rebase",
+      "tool": "git", "words": "pull", "class": "irreversible", "level": "block",
+      "when": "(^|[[:space:]])(--rebase|-r)([[:space:]]|$)",
+      "label": "git pull --rebase",
+      "why": "rebase 와 같은 일을 한다 — 이력을 다시 쓴다.",
+      "advice": "이력을 바꿉니다. 사람이 직접 하세요."
+    },
+    {
+      "id": "git-checkout-discard",
+      "tool": "git", "words": "checkout", "class": "irreversible", "level": "block",
+      "when": "(^|[[:space:]])(--|--force|-f)([[:space:]]|$)",
+      "label": "git checkout (변경 버림)",
+      "why": "`checkout -- .` 는 reset --hard 와 같은 손실이다.",
+      "advice": "커밋되지 않은 변경이 사라집니다. 되돌릴 수 없습니다."
+    },
+    {
+      "id": "git-switch-discard",
+      "tool": "git", "words": "switch", "class": "irreversible", "level": "block",
+      "when": "(^|[[:space:]])(--|--force|-f)([[:space:]]|$)",
+      "label": "git switch (변경 버림)",
+      "why": "`switch -f` 는 커밋 안 된 변경을 버리고 옮긴다.",
+      "advice": "커밋되지 않은 변경이 사라집니다. 되돌릴 수 없습니다."
+    },
+    {
+      "id": "git-restore",
+      "tool": "git", "words": "restore", "class": "irreversible", "level": "block",
+      "unless": "(^|[[:space:]])--staged([[:space:]]|$)",
+      "label": "git restore",
+      "why": "작업 트리를 되돌린다 — `--staged` 만 인덱스라 안전하다.",
+      "advice": "커밋되지 않은 변경이 사라집니다. 되돌릴 수 없습니다."
+    },
+    {
+      "id": "git-reflog-expire",
+      "tool": "git", "words": "reflog", "class": "irreversible", "level": "block",
+      "when": "(^|[[:space:]])expire([[:space:]]|$)",
+      "label": "git reflog expire",
+      "why": "reflog 는 사고 뒤 되돌리는 마지막 안전망이다.",
+      "advice": "되돌릴 안전망이 사라집니다."
+    },
+    {
+      "id": "git-stash-clear",
+      "tool": "git", "words": "stash", "class": "irreversible", "level": "block",
+      "when": "(^|[[:space:]])(clear|drop)([[:space:]]|$)",
+      "label": "git stash clear/drop",
+      "why": "스태시는 커밋이 아니라 지우면 찾을 곳이 없다.",
+      "advice": "스태시가 사라집니다. 되돌릴 수 없습니다."
+    },
+    {
+      "id": "git-update-ref-d",
+      "tool": "git", "words": "update-ref", "class": "irreversible", "level": "block",
+      "when": "(^|[[:space:]])-d([[:space:]]|$)",
+      "label": "git update-ref -d",
+      "why": "참조가 사라지면 그 아래 커밋이 도달 불가가 된다.",
+      "advice": "참조가 사라집니다."
+    },
+    {
+      "id": "git-subtree-push",
+      "tool": "git", "words": "subtree push", "class": "irreversible", "level": "block",
+      "label": "git subtree push",
+      "why": "원격을 바꾼다 — push 와 같다.",
+      "advice": "원격을 바꿉니다. 사람이 외부 툴로 합니다."
+    },
+
+    {
+      "id": "git-branch-force-delete",
+      "tool": "git", "words": "branch", "class": "irreversible", "level": "block",
+      "on": "rest", "caseSensitive": true,
+      "when": "(^|[[:space:]])(-[a-zA-Z]*D[a-zA-Z]*|--delete[[:space:]]+--force|--force[[:space:]]+--delete)([[:space:]]|$)",
+      "label": "git branch -D",
+      "why": "머지되지 않은 커밋이 도달 불가가 된다 — `-d` 는 그때 거부하니 통과시킨다.",
+      "advice": "미머지 커밋이 사라집니다. 지울 브랜치가 맞는지 사람이 확인하세요.",
+      "note": "`-D`/`-d` 를 가르려면 대소문자를 구별해야 한다 — 그래서 caseSensitive. `on: rest` 라 명령 앞 래퍼의 `-D` 는 얹히지 않는다.",
+      "diag": "diag-C 3절 실측 미탐"
+    },
+    {
+      "id": "git-worktree-remove-force",
+      "tool": "git", "words": "worktree remove", "class": "irreversible", "level": "block",
+      "when": "(^|[[:space:]])(--force|-[a-zA-Z]*f[a-zA-Z]*)([[:space:]]|$)",
+      "label": "git worktree remove --force",
+      "why": "미커밋 변경째로 워크트리를 지운다 — `--force` 없이는 git 이 거부하니 그건 통과시킨다.",
+      "advice": "미커밋 변경이 사라집니다. 되돌릴 수 없습니다.",
+      "diag": "diag-C 3절 실측 미탐"
+    },
+    {
+      "id": "git-gc-prune",
+      "tool": "git", "words": "gc", "class": "irreversible", "level": "block",
+      "when": "(^|[[:space:]])--prune([[:space:]]|=|$)",
+      "label": "git gc --prune",
+      "why": "도달 불가 객체를 즉시 지운다 — reflog 로도 못 찾는다.",
+      "advice": "되돌릴 객체가 사라집니다.",
+      "diag": "diag-C 3절 실측 미탐"
+    },
+
+    {
+      "id": "git-commit-no-verify",
+      "tool": "git", "words": "commit", "class": "defense-off", "level": "block",
+      "on": "rest",
+      "when": "(^|[[:space:]])(--no-verify|-[a-zA-Z]*n[a-zA-Z]*)([[:space:]]|$)",
+      "label": "git commit --no-verify",
+      "why": "drift 훅을 끈다 — 문서가 낡은 채 커밋되고 다음 세션이 그걸 진실로 믿는다.",
+      "advice": "훅을 끄지 말고 /flow:sync 로 문서를 맞추세요. 정말 넘겨야 하면 사람이 자기 터미널에서 합니다.",
+      "note": "`on: rest` 여야 한다 — 세그먼트 전체를 보면 `nice -n 10 git commit` 의 `-n` 이 얹히고, 커밋 메시지 안의 `-n` 도 얹힌다. `-n` 은 commit 에서 --no-verify 의 짧은 이름이라 같이 막는다.",
+      "diag": "diag-C 3절 실측 미탐. v1 은 /flow:commit 자신이 이걸 붙였다"
+    },
+    {
+      "id": "git-hooks-off",
+      "tool": "git", "words": "*", "class": "defense-off", "level": "block",
+      "when": "(-c|--config-env)[[:space:]=]*core\\.hooksPath",
+      "label": "git -c core.hooksPath=…",
+      "why": "훅 폴더를 바꿔 drift 훅 자체를 없는 것으로 만든다 — --no-verify 보다 조용하다.",
+      "advice": "훅을 끄지 마세요. 설정을 보려면 `git config --get core.hooksPath` 로 읽기만 하세요.",
+      "note": "서브커맨드를 안 본다(words `*`) — `commit` 뿐 아니라 어떤 명령에 붙어도 훅이 꺼진다. 읽기(`git config --get core.hooksPath`)는 `-c` 형태가 아니라 통과한다.",
+      "diag": "diag-C 3절 실측 미탐"
+    },
+
+    {
+      "id": "gh-pr-merge",
+      "tool": "gh", "words": "pr merge", "class": "irreversible", "level": "block",
+      "label": "gh pr merge",
+      "why": "머지는 사람의 판단이다.",
+      "advice": "머지는 사람이 합니다 — 충돌 판단과 이력 결정이 사람 몫입니다."
+    },
+    {
+      "id": "gh-release-create",
+      "tool": "gh", "words": "release create", "class": "external-state", "level": "block",
+      "label": "gh release create",
+      "why": "태그와 릴리스가 원격에 남고 사람이 알림을 받는다.",
+      "advice": "릴리스는 사람이 냅니다. 태그가 원격에 남습니다."
+    },
+    {
+      "id": "gh-release-delete",
+      "tool": "gh", "words": "release delete", "class": "irreversible", "level": "block",
+      "label": "gh release delete",
+      "why": "릴리스·태그가 원격에서 사라진다.",
+      "advice": "릴리스·태그가 사라집니다."
+    },
+    {
+      "id": "gh-repo-delete",
+      "tool": "gh", "words": "repo delete", "class": "irreversible", "level": "block",
+      "label": "gh repo delete",
+      "why": "저장소가 사라진다.",
+      "advice": "저장소가 사라집니다."
+    },
+    {
+      "id": "gh-secret-set",
+      "tool": "gh", "words": "secret set", "class": "irreversible", "level": "block",
+      "label": "gh secret set",
+      "why": "이전 값을 읽을 수 없어 되돌릴 수 없다.",
+      "advice": "GitHub 상태를 바꿉니다. 사람이 직접 하세요."
+    },
+    {
+      "id": "gh-variable-set",
+      "tool": "gh", "words": "variable set", "class": "irreversible", "level": "block",
+      "label": "gh variable set",
+      "why": "CI 가 읽는 값을 바꾼다.",
+      "advice": "GitHub 상태를 바꿉니다. 사람이 직접 하세요."
+    },
+    {
+      "id": "gh-api-write-method",
+      "tool": "gh", "words": "api", "class": "external-state", "level": "block",
+      "when": "(-X|--method)[[:space:]=]*(POST|PUT|DELETE|PATCH)",
+      "label": "gh api 쓰기",
+      "why": "임의의 GitHub 상태를 바꾼다 — 무엇이 바뀔지 훅이 알 수 없다.",
+      "advice": "GitHub 상태를 바꿉니다. 사람이 직접 하세요."
+    },
+    {
+      "id": "gh-api-graphql-mutation",
+      "tool": "gh", "words": "api graphql", "class": "external-state", "level": "block",
+      "when": "mutation",
+      "unless": "(-X|--method)[[:space:]=]*GET",
+      "label": "gh api graphql mutation",
+      "why": "GraphQL 읽기도 POST 라 메서드로는 못 가른다 — mutation 이라는 낱말로 가른다.",
+      "advice": "GitHub 상태를 바꿉니다. 사람이 직접 하세요."
+    },
+    {
+      "id": "gh-api-write-fields",
+      "tool": "gh", "words": "api", "notWords": "api graphql", "class": "external-state", "level": "block",
+      "when": "(^|[[:space:]])(-f|-F|--field|--raw-field|--input)([[:space:]=]|$)",
+      "unless": "(-X|--method)[[:space:]=]*GET",
+      "label": "gh api 쓰기(필드 플래그)",
+      "why": "필드만 줘도 gh 가 POST 로 보낸다 — 메서드를 안 적어도 쓰기가 된다.",
+      "advice": "필드를 주면 gh 가 POST 로 보냅니다. 사람이 직접 하세요.",
+      "note": "검색·페이지네이션은 `-f` 가 유일한 방법이라 `-X GET` 을 못 박았으면 읽기로 본다. graphql 은 위 규칙이 따로 본다."
+    },
+    {
+      "id": "gh-workflow-run",
+      "tool": "gh", "words": "workflow run", "class": "external-state", "level": "block",
+      "label": "gh workflow run",
+      "why": "**배포가 돈다.** 훅이 막는 것 중 유일하게 저장소 밖 시스템을 건드린다.",
+      "advice": "워크플로우 실행은 사람이 합니다. 무엇이 배포되는지 사람이 확인해야 합니다.",
+      "diag": "diag-C 3절 실측 미탐"
+    },
+    {
+      "id": "gh-pr-create",
+      "tool": "gh", "words": "pr create", "class": "external-state", "level": "block",
+      "label": "gh pr create",
+      "why": "리뷰어에게 알림이 가고 GitHub 에 상태가 남는다.",
+      "advice": "PR 은 사람이 엽니다 — 무엇을 리뷰 받을지가 사람의 판단입니다.",
+      "diag": "diag-C 3절 실측 미탐"
+    },
+    {
+      "id": "gh-issue-create",
+      "tool": "gh", "words": "issue create", "class": "external-state", "level": "block",
+      "label": "gh issue create",
+      "why": "GitHub 에 외부 상태가 남고 사람이 알림을 받는다.",
+      "advice": "이슈는 사람이 엽니다.",
+      "diag": "diag-C 3절 실측 미탐"
+    },
+    {
+      "id": "gh-repo-create",
+      "tool": "gh", "words": "repo create", "class": "external-state", "level": "block",
+      "label": "gh repo create",
+      "why": "조직에 저장소가 생긴다 — 지우는 것도 사람 일이다.",
+      "advice": "저장소는 사람이 만듭니다.",
+      "diag": "diag-C 3절 실측 미탐"
+    },
+
+    {
+      "id": "git-commit-amend",
+      "tool": "git", "words": "commit", "class": "judgement", "level": "ask",
+      "when": "(^|[[:space:]])--amend([[:space:]]|$)",
+      "label": "git commit --amend",
+      "why": "직전 커밋을 다시 쓴다 — 아직 push 안 했으면 정상 작업이고, 했으면 이력 사고다.",
+      "advice": "아직 push 하지 않은 커밋이면 안전합니다. push 한 커밋이면 남의 이력과 갈라집니다.",
+      "diag": "diag-C 3절 실측 미탐 — v1 은 rebase 는 막고 이건 안 막았다"
+    },
+    {
+      "id": "git-tag-delete",
+      "tool": "git", "words": "tag", "class": "judgement", "level": "ask",
+      "when": "(^|[[:space:]])(-d|--delete)([[:space:]]|$)",
+      "label": "git tag -d",
+      "why": "로컬 태그만이면 다시 붙이면 되고, 원격에도 있으면 릴리스 참조가 끊긴다.",
+      "advice": "원격에 같은 태그가 있는지 확인하세요. 로컬만이면 다시 붙일 수 있습니다.",
+      "diag": "diag-C 3절 실측 미탐"
+    },
+    {
+      "id": "git-stash-pop",
+      "tool": "git", "words": "stash pop", "class": "judgement", "level": "ask",
+      "label": "git stash pop",
+      "why": "충돌하면 스태시는 남지만 작업 트리가 반쯤 섞인다 — `apply` 가 더 안전하다.",
+      "advice": "충돌이 예상되면 `git stash apply` 로 스태시를 남긴 채 시도하세요.",
+      "diag": "diag-C 3절 실측 미탐"
+    }
+  ],
+
+  "$expect-note": [
+    "규칙별 케이스다. hooks.test.sh 가 이걸 읽어 훅에 그대로 먹인다.",
+    "  verdict block/ask → rule 필수. 그 규칙이 사라지면 이 줄이 고아가 되어 테스트가 실패한다.",
+    "  verdict pass      → rule 은 그 규칙의 **경계**를 뜻한다(막지 말아야 하는 인접 형태).",
+    "규칙에 block/ask 케이스가 하나도 없으면 테스트가 실패한다 — 케이스 없는 규칙을 못 넣는다.",
+    "스캐너(인용·here-doc) 회귀 케이스는 여기가 아니라 hooks.test.sh 안에 있다 — 규칙이 아니라 파서의 사고 기록이라서다."
+  ],
+  "expect": [
+    { "cmd": "git push",                          "verdict": "block", "rule": "git-push" },
+    { "cmd": "git push origin main",               "verdict": "block", "rule": "git-push" },
+    { "cmd": "git push --force",                   "verdict": "block", "rule": "git-push" },
+    { "cmd": "git push -f origin main",            "verdict": "block", "rule": "git-push" },
+    { "cmd": "git push --abort",                   "verdict": "block", "rule": "git-push" },
+    { "cmd": "git push --dry-run",                 "verdict": "pass",  "rule": "git-push" },
+    { "cmd": "git help push",                      "verdict": "pass",  "rule": "git-push" },
+
+    { "cmd": "git merge feature/x",                "verdict": "block", "rule": "git-merge" },
+    { "cmd": "git merge --continue",               "verdict": "block", "rule": "git-merge" },
+    { "cmd": "git -c note=--abort merge dev",      "verdict": "block", "rule": "git-merge" },
+    { "cmd": "git merge --abort",                  "verdict": "pass",  "rule": "git-merge" },
+    { "cmd": "git merge --quit",                   "verdict": "pass",  "rule": "git-merge" },
+
+    { "cmd": "git rebase main",                    "verdict": "block", "rule": "git-rebase" },
+    { "cmd": "git rebase --continue",              "verdict": "block", "rule": "git-rebase" },
+    { "cmd": "git rebase --abort",                  "verdict": "pass", "rule": "git-rebase" },
+    { "cmd": "git rebase --skip",                   "verdict": "pass", "rule": "git-rebase" },
+
+    { "cmd": "git filter-branch --all",            "verdict": "block", "rule": "git-filter-branch" },
+    { "cmd": "git filter-repo --path x",           "verdict": "block", "rule": "git-filter-repo" },
+
+    { "cmd": "git reset --hard",                   "verdict": "block", "rule": "git-reset-hard" },
+    { "cmd": "git reset --hard HEAD~3",            "verdict": "block", "rule": "git-reset-hard" },
+    { "cmd": "git reset HEAD~1",                   "verdict": "pass",  "rule": "git-reset-hard" },
+    { "cmd": "git reset --soft HEAD~1",            "verdict": "pass",  "rule": "git-reset-hard" },
+
+    { "cmd": "git clean -f",                       "verdict": "block", "rule": "git-clean-force" },
+    { "cmd": "git clean -fd",                      "verdict": "block", "rule": "git-clean-force" },
+    { "cmd": "git clean --force",                  "verdict": "block", "rule": "git-clean-force" },
+    { "cmd": "git clean -d --force",               "verdict": "block", "rule": "git-clean-force" },
+    { "cmd": "git clean -n",                       "verdict": "pass",  "rule": "git-clean-force" },
+    { "cmd": "git clean --dry-run",                "verdict": "pass",  "rule": "git-clean-force" },
+
+    { "cmd": "git pull --rebase origin main",      "verdict": "block", "rule": "git-pull-rebase" },
+    { "cmd": "git pull origin main",               "verdict": "pass",  "rule": "git-pull-rebase" },
+
+    { "cmd": "git checkout -- .",                  "verdict": "block", "rule": "git-checkout-discard" },
+    { "cmd": "git checkout -f main",               "verdict": "block", "rule": "git-checkout-discard" },
+    { "cmd": "git checkout -b feature/x",          "verdict": "pass",  "rule": "git-checkout-discard" },
+    { "cmd": "git checkout main",                  "verdict": "pass",  "rule": "git-checkout-discard" },
+
+    { "cmd": "git switch -f main",                 "verdict": "block", "rule": "git-switch-discard" },
+    { "cmd": "git switch main",                    "verdict": "pass",  "rule": "git-switch-discard" },
+
+    { "cmd": "git restore src/a.ts",               "verdict": "block", "rule": "git-restore" },
+    { "cmd": "git restore --staged src/a.ts",      "verdict": "pass",  "rule": "git-restore" },
+
+    { "cmd": "git reflog expire --expire=now --all", "verdict": "block", "rule": "git-reflog-expire" },
+    { "cmd": "git reflog",                          "verdict": "pass",  "rule": "git-reflog-expire" },
+
+    { "cmd": "git stash clear",                    "verdict": "block", "rule": "git-stash-clear" },
+    { "cmd": "git stash drop",                     "verdict": "block", "rule": "git-stash-clear" },
+    { "cmd": "git stash list",                     "verdict": "pass",  "rule": "git-stash-clear" },
+
+    { "cmd": "git update-ref -d refs/heads/x",     "verdict": "block", "rule": "git-update-ref-d" },
+    { "cmd": "git subtree push --prefix dist origin gh-pages", "verdict": "block", "rule": "git-subtree-push" },
+
+    { "cmd": "git branch -D feature/x",            "verdict": "block", "rule": "git-branch-force-delete" },
+    { "cmd": "git branch -rD origin/x",            "verdict": "block", "rule": "git-branch-force-delete" },
+    { "cmd": "git branch --delete --force x",      "verdict": "block", "rule": "git-branch-force-delete" },
+    { "cmd": "git branch -a",                      "verdict": "pass",  "rule": "git-branch-force-delete" },
+    { "cmd": "git branch -d merged/x",             "verdict": "pass",  "rule": "git-branch-force-delete" },
+    { "cmd": "git branch --list",                  "verdict": "pass",  "rule": "git-branch-force-delete" },
+
+    { "cmd": "git worktree remove --force wt",     "verdict": "block", "rule": "git-worktree-remove-force" },
+    { "cmd": "git worktree remove -f wt",          "verdict": "block", "rule": "git-worktree-remove-force" },
+    { "cmd": "git worktree remove wt",             "verdict": "pass",  "rule": "git-worktree-remove-force" },
+    { "cmd": "git worktree list",                  "verdict": "pass",  "rule": "git-worktree-remove-force" },
+
+    { "cmd": "git gc --prune=now",                 "verdict": "block", "rule": "git-gc-prune" },
+    { "cmd": "git gc --prune",                     "verdict": "block", "rule": "git-gc-prune" },
+    { "cmd": "git gc",                             "verdict": "pass",  "rule": "git-gc-prune" },
+    { "cmd": "git gc --auto",                      "verdict": "pass",  "rule": "git-gc-prune" },
+
+    { "cmd": "git commit --no-verify -m x",        "verdict": "block", "rule": "git-commit-no-verify" },
+    { "cmd": "git commit -n -m x",                 "verdict": "block", "rule": "git-commit-no-verify" },
+    { "cmd": "git commit -m 'x' --no-verify",      "verdict": "block", "rule": "git-commit-no-verify" },
+    { "cmd": "git commit -m x",                    "verdict": "pass",  "rule": "git-commit-no-verify" },
+    { "cmd": "nice -n 10 git commit -m x",         "verdict": "pass",  "rule": "git-commit-no-verify" },
+    { "cmd": "git commit -m \"-n 을 쓰지 마세요\"",  "verdict": "pass",  "rule": "git-commit-no-verify" },
+    { "cmd": "git commit -am fix",                 "verdict": "pass",  "rule": "git-commit-no-verify" },
+
+    { "cmd": "git -c core.hooksPath=/dev/null commit -m x", "verdict": "block", "rule": "git-hooks-off" },
+    { "cmd": "git -c core.hooksPath= status",      "verdict": "block", "rule": "git-hooks-off" },
+    { "cmd": "git --config-env=core.hooksPath=X commit -m x", "verdict": "block", "rule": "git-hooks-off" },
+    { "cmd": "git config --get core.hooksPath",    "verdict": "pass",  "rule": "git-hooks-off" },
+    { "cmd": "git config core.hooksPath .githooks", "verdict": "pass", "rule": "git-hooks-off" },
+
+    { "cmd": "gh pr merge 12",                     "verdict": "block", "rule": "gh-pr-merge" },
+    { "cmd": "gh release create v1.0.0",           "verdict": "block", "rule": "gh-release-create" },
+    { "cmd": "gh release delete v1 --yes",         "verdict": "block", "rule": "gh-release-delete" },
+    { "cmd": "gh repo delete owner/x",             "verdict": "block", "rule": "gh-repo-delete" },
+    { "cmd": "gh secret set TOKEN --body x",       "verdict": "block", "rule": "gh-secret-set" },
+    { "cmd": "gh variable set K --body v",         "verdict": "block", "rule": "gh-variable-set" },
+    { "cmd": "gh release list",                    "verdict": "pass",  "rule": "gh-release-create" },
+    { "cmd": "gh pr list",                         "verdict": "pass",  "rule": "gh-pr-merge" },
+
+    { "cmd": "gh api --method POST /repos",        "verdict": "block", "rule": "gh-api-write-method" },
+    { "cmd": "gh api -X 'POST' /x",                "verdict": "block", "rule": "gh-api-write-method" },
+    { "cmd": "gh api -X post /x",                  "verdict": "block", "rule": "gh-api-write-method" },
+    { "cmd": "gh api --method DELETE /x",          "verdict": "block", "rule": "gh-api-write-method" },
+    { "cmd": "gh api graphql -f query=mutation{x}", "verdict": "block", "rule": "gh-api-graphql-mutation" },
+    { "cmd": "gh api graphql -f query=query{viewer{login}}", "verdict": "pass", "rule": "gh-api-graphql-mutation" },
+    { "cmd": "gh api -f title=x /repos/o/r/issues", "verdict": "block", "rule": "gh-api-write-fields" },
+    { "cmd": "gh api --field a=b /x",              "verdict": "block", "rule": "gh-api-write-fields" },
+    { "cmd": "gh api --raw-field a=b /x",          "verdict": "block", "rule": "gh-api-write-fields" },
+    { "cmd": "gh api --input body.json /repos/o/r/issues", "verdict": "block", "rule": "gh-api-write-fields" },
+    { "cmd": "gh api -X GET -f q=x /search/code",  "verdict": "pass",  "rule": "gh-api-write-fields" },
+    { "cmd": "gh api /repos/o/r",                  "verdict": "pass",  "rule": "gh-api-write-fields" },
+
+    { "cmd": "gh workflow run deploy.yml",         "verdict": "block", "rule": "gh-workflow-run" },
+    { "cmd": "gh workflow list",                   "verdict": "pass",  "rule": "gh-workflow-run" },
+    { "cmd": "gh pr create --fill",                "verdict": "block", "rule": "gh-pr-create" },
+    { "cmd": "gh issue create --title x",          "verdict": "block", "rule": "gh-issue-create" },
+    { "cmd": "gh repo create owner/x",             "verdict": "block", "rule": "gh-repo-create" },
+    { "cmd": "gh issue list",                      "verdict": "pass",  "rule": "gh-issue-create" },
+
+    { "cmd": "git commit --amend -m x",            "verdict": "ask",   "rule": "git-commit-amend" },
+    { "cmd": "git commit --amend --no-edit",       "verdict": "ask",   "rule": "git-commit-amend" },
+    { "cmd": "git commit -m x",                    "verdict": "pass",  "rule": "git-commit-amend" },
+
+    { "cmd": "git tag -d v1",                      "verdict": "ask",   "rule": "git-tag-delete" },
+    { "cmd": "git tag --delete v1",                "verdict": "ask",   "rule": "git-tag-delete" },
+    { "cmd": "git tag -l",                         "verdict": "pass",  "rule": "git-tag-delete" },
+    { "cmd": "git tag v1.0.0",                     "verdict": "pass",  "rule": "git-tag-delete" },
+
+    { "cmd": "git stash pop",                      "verdict": "ask",   "rule": "git-stash-pop" },
+    { "cmd": "git stash apply",                    "verdict": "pass",  "rule": "git-stash-pop" },
+
+    { "cmd": "git commit --amend --no-verify",     "verdict": "block", "rule": "git-commit-no-verify" }
+  ],
+
+  "$limits-note": [
+    "**막지 못하는 것을 여기 적는다.** v1 은 셸 우회만 한계로 적고, 목록에서 빠진 명령은",
+    "한계로도 적지 않았다 — 그래서 문서가 실제 방어보다 넓게 읽혔다(diag-C 3절).",
+    "생성되는 사용자 문서는 차단표와 이 목록을 **함께** 싣는다."
+  ],
+  "limits": [
+    "셸 우회 — eval \"git pu\"\"sh\" · P=push; git $P · 스크립트 파일에 써서 실행",
+    "다른 실행 경로 — python subprocess · MCP 도구 (matcher 가 Bash 라서 훅이 아예 안 돈다)",
+    "사람 터미널 — 이 훅은 Claude Code 세션에만 걸린다. Sourcetree·IDE·직접 셸에는 안 걸린다",
+    "deny-list 라 목록에 없는 명령은 통과한다. 늘리는 비용을 없앴으니 늘려서 대응한다",
+    "과차단 방향으로 기운 것 — `echo git push`(인용 없이)는 막힌다. 인용하면 통과한다",
+    "here-doc 구분자를 못 닫으면 본문을 명령으로 스캔한다(과차단)"
+  ],
+  "$paths-note": "환경변수 우회 수단을 두지 않는다 — AI 가 그걸 설정해 통과한다. FLOW_GUARD_RULES 는 테스트가 픽스처를 물릴 때만 쓰고, 값이 있어도 판정을 느슨하게 하지는 않는다."
+}
