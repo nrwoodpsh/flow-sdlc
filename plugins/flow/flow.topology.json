@@ -11,14 +11,7 @@
     "약속을 약속이라고 적는 것이 이 파일의 일이다."
   ],
   "version": 1,
-
-  "$pending-note": [
-    "**빈 것과 없는 것을 구별한다.** 아래 키는 다른 워커(커맨드·스킬 층)의 산출을 기다리는 중이라",
-    "`null` 로 두었다. 키가 아예 없으면 스키마 위반이고, `null` 이면 '아직'이다 —",
-    "`lint.py` 의 `topology-pending` 검사가 그 둘을 가른다. 채우면 pending 목록에서 지운다."
-  ],
-  "pending": ["commands.*.loads", "commands.*.procedures", "skills"],
-
+  "pending": [],
   "manifest": {
     "$note": [
       "두 매니페스트(plugin.json · marketplace.json)의 `description` 은 **여기서 생성한다.**",
@@ -27,10 +20,17 @@
       "`scripts/gen_docs.py --write` 가 쓰고 `lint.py` 의 `generated-up-to-date` 가 대조한다."
     ],
     "descriptionHead": "개발 라이프사이클 오케스트레이터 — ",
-    "descriptionChain": ["prd", "design", "build", "verify", "review", "sync", "commit"],
+    "descriptionChain": [
+      "prd",
+      "design",
+      "build",
+      "verify",
+      "review",
+      "sync",
+      "commit"
+    ],
     "descriptionTail": "요구 ID로 잇는 추적 축 + 기계 게이트(Write·Edit 는 훅이 판정) + 되돌릴 수 없는 명령 차단. 어디서 시작할지 모르면 /flow:next."
   },
-
   "grades": {
     "machine": {
       "누가 판정하나": "PreToolUse 훅이 이 파일을 읽는다",
@@ -48,7 +48,6 @@
       "우회": "전부. **그래서 표에 약속이라고 적는다**"
     }
   },
-
   "gate": {
     "$note": [
       "기계 게이트의 판정 근거다. `gate-source-write.sh` 가 이 절만 읽는다.",
@@ -56,16 +55,16 @@
       "설계 없이 구현이 앞서가는 것을 막는 것이지, 문서를 많이 쓰게 하는 것이 아니다."
     ],
     "enabled": true,
-
     "workRoot": "doc/01.work",
     "unitDepth": 2,
     "$unitDepth-note": "`doc/01.work/{도메인}/{NN.유닛}/` 두 단계다. drift-hook.sh 의 `find -mindepth 2 -maxdepth 2` 와 같은 규칙이어야 한다.",
-
     "taskDoc": {
-      "globs": ["2.task/*.md", "2.task.md"],
+      "globs": [
+        "2.task/*.md",
+        "2.task.md"
+      ],
       "$note": "v1 은 유닛 안에서 `2.task/NN.name.md` 를 쓴다. 작은 유닛의 단일 파일 형태도 받는다."
     },
-
     "requirementTag": {
       "field": "requirement",
       "placeholderPattern": "\\{\\{",
@@ -75,7 +74,6 @@
         "채워지지 않은 템플릿(`{{USER-LOGIN-1}}`)은 태그가 없는 것으로 본다. 그게 실제 상태다."
       ]
     },
-
     "fileMap": {
       "pattern": "\\[(New|Mod)\\][ \\t]*`?([^`\\s]+)`?",
       "$note": [
@@ -85,7 +83,6 @@
         "`s`·`p`·`a`·`c`·`e` 를 제외하는 클래스로 해석돼 경로를 통째로 못 잡는다. 실제로 그랬다."
       ]
     },
-
     "unitResolution": {
       "mode": "declared-file-map",
       "fallback": "any-unit-has-task",
@@ -97,12 +94,20 @@
         "  그러면 사람이 훅을 꺼 버린다(설계가 스스로 적은 실패 경로다). 거친 것을 거칠다고 적고 쓴다."
       ]
     },
-
     "source": {
       "configKey": "drift.sourceGlobs",
       "ignoreKey": "drift.ignore",
-      "defaultIgnore": ["**/*.md", "**/*.test.*", "spike/**"],
-      "defaultNonSource": ["doc/", "spike/", ".claude/", ".github/"],
+      "defaultIgnore": [
+        "**/*.md",
+        "**/*.test.*",
+        "spike/**"
+      ],
+      "defaultNonSource": [
+        "doc/",
+        "spike/",
+        ".claude/",
+        ".github/"
+      ],
       "$note": [
         "소스 판정은 `drift-hook.sh` 의 `is_source` 와 **같은 규칙**이어야 한다.",
         "① drift.ignore 에 맞으면 소스가 아니다 ② drift.sourceGlobs 가 있으면 그 안만 소스",
@@ -110,7 +115,6 @@
         "두 훅이 어긋나면 '커밋은 막히는데 쓰기는 통과' 같은 앞뒤가 안 맞는 상태가 된다."
       ]
     },
-
     "exemptions": [
       {
         "id": "no-units",
@@ -122,7 +126,9 @@
         "id": "spike",
         "what": "spike/ 아래",
         "why": "버릴 코드다. task 문서가 없는 것이 정상이다",
-        "paths": ["spike/**"]
+        "paths": [
+          "spike/**"
+        ]
       },
       {
         "id": "not-source",
@@ -142,7 +148,6 @@
         "why": "not-source 와 겹치지만 따로 적는다 — 게이트가 자기 근거 문서를 막으면 고칠 길이 없다"
       }
     ],
-
     "missingCanon": {
       "decision": "ask",
       "$why": [
@@ -159,167 +164,690 @@
       ]
     }
   },
-
   "commands": {
     "setup": {
-      "order": 1, "phase": "도입",
-      "after": [], "next": ["prd", "design"],
+      "order": 1,
+      "phase": "도입",
+      "after": [],
+      "next": [
+        "prd",
+        "design"
+      ],
       "entry": {
         "machine": [],
         "content": [],
         "promise": [
-          { "id": "setup-idempotent", "what": "이미 깔린 프로젝트에 두 번 돌려도 덮어쓰지 않는다" }
+          {
+            "id": "setup-idempotent",
+            "what": "이미 깔린 프로젝트에 두 번 돌려도 덮어쓰지 않는다"
+          }
         ]
       },
-      "loads": null, "procedures": null
+      "loads": {
+        "skills": [
+          "contract-gate",
+          "plain-writing"
+        ],
+        "fragments": [
+          "contract-gate/config"
+        ]
+      },
+      "procedures": []
     },
     "next": {
-      "order": 2, "phase": "라우팅",
-      "after": [], "next": ["prd", "design", "build", "verify", "review", "sync", "commit"],
+      "order": 2,
+      "phase": "라우팅",
+      "after": [],
+      "next": [
+        "prd",
+        "design",
+        "build",
+        "verify",
+        "review",
+        "sync",
+        "commit"
+      ],
       "entry": {
         "machine": [
-          { "id": "has-config", "what": "workflow.config.json 이 있다", "how": "파일 존재" }
+          {
+            "id": "has-config",
+            "what": "workflow.config.json 이 있다",
+            "how": "파일 존재"
+          }
         ],
         "content": [],
         "promise": [
-          { "id": "ops-safety", "what": "운영 장애·SOP 는 완화 우선이고 `사람만` 단계를 실행하지 않는다",
+          {
+            "id": "ops-safety",
+            "what": "운영 장애·SOP 는 완화 우선이고 `사람만` 단계를 실행하지 않는다",
             "why": "v1 ask 1-A·1-D 의 안전 규칙이다. 기계로 판정할 수 없어 약속으로 남는다",
-            "canon": "ops-doc" }
+            "canon": "ops-doc"
+          }
         ]
       },
-      "loads": null, "procedures": null
+      "loads": {
+        "skills": [
+          "traceability",
+          "ops-doc",
+          "code-review"
+        ],
+        "fragments": [
+          "traceability/level",
+          "traceability/unit-state",
+          "traceability/revert-scope",
+          "ops-doc/safety",
+          "code-review/severity"
+        ]
+      },
+      "procedures": []
     },
     "prd": {
-      "order": 3, "phase": "요구",
-      "after": ["setup"], "next": ["design"],
+      "order": 3,
+      "phase": "요구",
+      "after": [
+        "setup"
+      ],
+      "next": [
+        "design"
+      ],
       "entry": {
         "machine": [
-          { "id": "has-config", "what": "workflow.config.json 이 있다", "how": "파일 존재" }
+          {
+            "id": "has-config",
+            "what": "workflow.config.json 이 있다",
+            "how": "파일 존재"
+          }
         ],
         "content": [
-          { "id": "level-decision", "what": "요구의 레벨(시스템·도메인·기능)이 맞나", "who": "gatekeeper" }
+          {
+            "id": "level-decision",
+            "what": "요구의 레벨(시스템·도메인·기능)이 맞나",
+            "who": "gatekeeper"
+          }
         ],
         "promise": [
-          { "id": "append-only", "what": "요구 ID 는 불변·append-only — 번호를 재편하지 않는다", "canon": "traceability" }
+          {
+            "id": "append-only",
+            "what": "요구 ID 는 불변·append-only — 번호를 재편하지 않는다",
+            "canon": "traceability"
+          }
         ]
       },
-      "loads": null, "procedures": null
+      "loads": {
+        "skills": [
+          "traceability",
+          "usecase",
+          "doc-template",
+          "plain-writing",
+          "default-reference"
+        ],
+        "fragments": [
+          "traceability/level",
+          "traceability/id-system",
+          "traceability/conflict",
+          "usecase/granularity",
+          "usecase/rule-level",
+          "usecase/figure-scope",
+          "doc-template/diagram",
+          "doc-template/template-gap"
+        ]
+      },
+      "procedures": []
     },
     "design": {
-      "order": 4, "phase": "설계",
-      "after": ["prd"], "next": ["build", "spike"],
+      "order": 4,
+      "phase": "설계",
+      "after": [
+        "prd"
+      ],
+      "next": [
+        "build",
+        "spike"
+      ],
       "entry": {
         "machine": [
-          { "id": "requirement-doc-exists", "what": "그 레벨의 요구 문서가 있다", "how": "경로 존재" }
+          {
+            "id": "requirement-doc-exists",
+            "what": "그 레벨의 요구 문서가 있다",
+            "how": "경로 존재"
+          }
         ],
         "content": [
-          { "id": "requirement-covered", "what": "설계가 그 요구를 실제로 덮나", "who": "gatekeeper" }
+          {
+            "id": "requirement-covered",
+            "what": "설계가 그 요구를 실제로 덮나",
+            "who": "gatekeeper"
+          }
         ],
         "promise": []
       },
-      "loads": null, "procedures": null
+      "loads": {
+        "modes": {
+          "시스템·도메인": {
+            "skills": [
+              "traceability",
+              "usecase",
+              "doc-template",
+              "theme-apply",
+              "plain-writing",
+              "default-reference"
+            ],
+            "fragments": [
+              "traceability/level",
+              "traceability/id-system",
+              "traceability/conflict",
+              "traceability/tagging",
+              "usecase/rule-level",
+              "doc-template/diagram",
+              "doc-template/template-gap",
+              "default-reference/delegation"
+            ]
+          },
+          "기능": {
+            "skills": [
+              "traceability",
+              "doc-template",
+              "contract-gate",
+              "impact-analysis",
+              "plain-writing",
+              "default-reference"
+            ],
+            "fragments": [
+              "traceability/tagging",
+              "doc-template/task-doc",
+              "doc-verify/canon-map",
+              "contract-gate/config",
+              "contract-gate/failure",
+              "impact-analysis/regression-surface"
+            ]
+          }
+        }
+      },
+      "procedures": [
+        "design/feature",
+        "design/system"
+      ]
     },
     "build": {
-      "order": 5, "phase": "구현",
-      "after": ["design"], "next": ["verify", "review", "sync"],
+      "order": 5,
+      "phase": "구현",
+      "after": [
+        "design"
+      ],
+      "next": [
+        "verify",
+        "review",
+        "sync"
+      ],
       "entry": {
         "machine": [
-          { "id": "unit-task-doc", "what": "쓰려는 소스를 담은 task 문서가 있다",
-            "how": "gate-source-write.sh — PreToolUse Write|Edit · Bash 경유 쓰기는 guard 가 물어본다" },
-          { "id": "unit-req-tag", "what": "그 task 문서에 요구 태그가 있다",
-            "how": "같음 — frontmatter `requirement:`" }
+          {
+            "id": "unit-task-doc",
+            "what": "쓰려는 소스를 담은 task 문서가 있다",
+            "how": "gate-source-write.sh — PreToolUse Write|Edit · Bash 경유 쓰기는 guard 가 물어본다"
+          },
+          {
+            "id": "unit-req-tag",
+            "what": "그 task 문서에 요구 태그가 있다",
+            "how": "같음 — frontmatter `requirement:`"
+          }
         ],
         "content": [
-          { "id": "contract-followed", "what": "구현이 계약을 따르나", "who": "gatekeeper" }
+          {
+            "id": "contract-followed",
+            "what": "구현이 계약을 따르나",
+            "who": "gatekeeper"
+          }
         ],
         "promise": [
-          { "id": "no-self-verify", "what": "구현한 쪽이 자기 검증을 하지 않는다",
-            "why": "LLM 자기확인 편향 방어. 도구 권한으로 일부 갈리지만 호출 자체는 약속이다" }
+          {
+            "id": "no-self-verify",
+            "what": "구현한 쪽이 자기 검증을 하지 않는다",
+            "why": "LLM 자기확인 편향 방어. 도구 권한으로 일부 갈리지만 호출 자체는 약속이다"
+          }
         ]
       },
-      "loads": null, "procedures": null
+      "loads": {
+        "skills": [
+          "traceability",
+          "testing",
+          "contract-gate",
+          "code-review",
+          "plain-writing",
+          "default-reference",
+          "code-graph",
+          "impact-analysis",
+          "doc-template"
+        ],
+        "fragments": [
+          "traceability/tagging",
+          "traceability/unit-state",
+          "testing/run",
+          "testing/case-source",
+          "contract-gate/failure",
+          "code-review/checklist",
+          "default-reference/delegation",
+          "impact-analysis/regression-surface",
+          "code-graph/query",
+          "doc-template/task-doc",
+          "testing/llm-cost"
+        ]
+      },
+      "procedures": [
+        "build/schema-change",
+        "build/unit-verify"
+      ]
     },
     "verify": {
-      "order": 6, "phase": "검증",
-      "after": ["build"], "next": ["review", "sync"],
+      "order": 6,
+      "phase": "검증",
+      "after": [
+        "build"
+      ],
+      "next": [
+        "review",
+        "sync"
+      ],
       "entry": {
         "machine": [
-          { "id": "unit-task-doc", "what": "task 문서가 있다", "how": "경로 존재" }
+          {
+            "id": "unit-task-doc",
+            "what": "task 문서가 있다",
+            "how": "경로 존재"
+          }
         ],
         "content": [
-          { "id": "coverage-gap", "what": "요구 커버리지에 gap 이 있나", "who": "gatekeeper" }
+          {
+            "id": "coverage-gap",
+            "what": "요구 커버리지에 gap 이 있나",
+            "who": "gatekeeper"
+          }
         ],
         "promise": [
-          { "id": "run-not-infer", "what": "테스트를 실제로 돌려 exit code 로 판정한다 — 추론은 검증이 아니다",
-            "canon": "testing" }
+          {
+            "id": "run-not-infer",
+            "what": "테스트를 실제로 돌려 exit code 로 판정한다 — 추론은 검증이 아니다",
+            "canon": "testing"
+          }
         ]
       },
-      "loads": null, "procedures": null
+      "loads": {
+        "modes": {
+          "단위": {
+            "skills": [
+              "testing",
+              "traceability",
+              "plain-writing"
+            ],
+            "fragments": [
+              "testing/run",
+              "testing/case-source",
+              "traceability/coverage"
+            ]
+          },
+          "통합·커버리지": {
+            "skills": [
+              "testing",
+              "traceability",
+              "plain-writing",
+              "default-reference"
+            ],
+            "fragments": [
+              "testing/run",
+              "testing/case-source",
+              "testing/integration",
+              "traceability/coverage",
+              "default-reference/delegation"
+            ]
+          }
+        }
+      },
+      "procedures": [
+        "verify/coverage",
+        "verify/run"
+      ]
     },
     "review": {
-      "order": 7, "phase": "리뷰",
-      "after": ["build", "verify"], "next": ["sync"],
+      "order": 7,
+      "phase": "리뷰",
+      "after": [
+        "build",
+        "verify"
+      ],
+      "next": [
+        "sync"
+      ],
       "entry": {
         "machine": [],
         "content": [
-          { "id": "finding-severity", "what": "발견의 severity 판정", "who": "reviewer" }
+          {
+            "id": "finding-severity",
+            "what": "발견의 severity 판정",
+            "who": "reviewer"
+          }
         ],
         "promise": [
-          { "id": "critical-rule-based", "what": "critical 차단은 룰 기반 발견만 — 오탐으로 파이프라인을 멈추지 않는다" }
+          {
+            "id": "critical-rule-based",
+            "what": "critical 차단은 룰 기반 발견만 — 오탐으로 파이프라인을 멈추지 않는다"
+          }
         ]
       },
-      "loads": null, "procedures": null
+      "loads": {
+        "modes": {
+          "코드": {
+            "skills": [
+              "code-review",
+              "code-graph",
+              "testing",
+              "plain-writing",
+              "default-reference"
+            ],
+            "fragments": [
+              "code-review/layers",
+              "code-review/severity",
+              "code-review/checklist",
+              "code-graph/query",
+              "code-graph/service-boundary",
+              "testing/run",
+              "default-reference/delegation"
+            ]
+          },
+          "문서": {
+            "skills": [
+              "doc-verify",
+              "usecase",
+              "traceability",
+              "ops-doc",
+              "plain-writing",
+              "default-reference"
+            ],
+            "fragments": [
+              "doc-verify/grade",
+              "doc-verify/scoring",
+              "doc-verify/canon-map",
+              "usecase/granularity",
+              "usecase/figure-scope",
+              "usecase/rule-level",
+              "traceability/coverage",
+              "ops-doc/postmortem",
+              "default-reference/delegation"
+            ]
+          }
+        }
+      },
+      "procedures": [
+        "review/code",
+        "review/doc"
+      ]
     },
     "sync": {
-      "order": 8, "phase": "수렴",
-      "after": ["build", "verify", "review"], "next": ["commit"],
+      "order": 8,
+      "phase": "수렴",
+      "after": [
+        "build",
+        "verify",
+        "review"
+      ],
+      "next": [
+        "commit"
+      ],
       "entry": {
         "machine": [
-          { "id": "source-changed", "what": "소스 변경이 있다", "how": "git diff" }
+          {
+            "id": "source-changed",
+            "what": "소스 변경이 있다",
+            "how": "git diff"
+          }
         ],
         "content": [],
         "promise": []
       },
-      "loads": null, "procedures": null
+      "loads": {
+        "skills": [
+          "traceability",
+          "drift-check",
+          "doc-verify",
+          "contract-gate",
+          "plain-writing",
+          "default-reference"
+        ],
+        "fragments": [
+          "traceability/tagging",
+          "traceability/unit-state",
+          "traceability/coverage",
+          "traceability/conflict",
+          "doc-verify/canon-map",
+          "contract-gate/failure",
+          "default-reference/delegation"
+        ]
+      },
+      "procedures": [
+        "sync/index"
+      ]
     },
     "commit": {
-      "order": 9, "phase": "커밋",
-      "after": ["sync"], "next": [],
+      "order": 9,
+      "phase": "커밋",
+      "after": [
+        "sync"
+      ],
+      "next": [],
       "entry": {
         "machine": [
-          { "id": "no-drift", "what": "소스만 바뀌고 문서가 안 온 상태가 아니다",
-            "how": "drift-hook.sh (pre-commit) — 사람 경로에서도 돈다" }
+          {
+            "id": "no-drift",
+            "what": "소스만 바뀌고 문서가 안 온 상태가 아니다",
+            "how": "drift-hook.sh (pre-commit) — 사람 경로에서도 돈다"
+          }
         ],
         "content": [],
         "promise": []
       },
-      "loads": null, "procedures": null
+      "loads": {
+        "skills": [
+          "drift-check",
+          "code-review",
+          "code-graph"
+        ],
+        "fragments": [
+          "drift-check/rule",
+          "code-review/severity",
+          "code-graph/service-boundary"
+        ]
+      },
+      "procedures": [
+        "commit/pre-commit-checks"
+      ]
     },
     "spike": {
-      "order": 10, "phase": "검증(버릴 코드)",
-      "after": ["design"], "next": ["design", "build"],
+      "order": 10,
+      "phase": "검증(버릴 코드)",
+      "after": [
+        "design"
+      ],
+      "next": [
+        "design",
+        "build"
+      ],
       "entry": {
         "machine": [],
         "content": [],
         "promise": [
-          { "id": "throwaway", "what": "spike/ 코드는 유지보수 자산이 아니다 — 남기는 것은 ADR·ref 다" }
+          {
+            "id": "throwaway",
+            "what": "spike/ 코드는 유지보수 자산이 아니다 — 남기는 것은 ADR·ref 다"
+          }
         ]
       },
-      "loads": null, "procedures": null
+      "loads": {
+        "skills": [
+          "testing",
+          "plain-writing"
+        ],
+        "fragments": [
+          "testing/run"
+        ]
+      },
+      "procedures": [
+        "spike/adr-handoff"
+      ]
     },
     "publish": {
-      "order": 11, "phase": "발행",
-      "after": ["sync"], "next": [],
+      "order": 11,
+      "phase": "발행",
+      "after": [
+        "sync"
+      ],
+      "next": [],
       "entry": {
         "machine": [],
         "content": [],
         "promise": [
-          { "id": "external-confirm", "what": "외부 발행이라 사람 확인 뒤에 실행한다" }
+          {
+            "id": "external-confirm",
+            "what": "외부 발행이라 사람 확인 뒤에 실행한다"
+          }
         ]
       },
-      "loads": null, "procedures": null
+      "loads": {
+        "skills": [
+          "doc-template",
+          "plain-writing",
+          "default-reference"
+        ],
+        "fragments": [
+          "doc-template/diagram",
+          "default-reference/delegation"
+        ]
+      },
+      "procedures": [
+        "publish/collect",
+        "publish/url-record"
+      ]
     }
   },
-
-  "skills": null
+  "skills": {
+    "code-graph": {
+      "fragments": [
+        "query",
+        "service-boundary"
+      ]
+    },
+    "code-review": {
+      "fragments": [
+        "checklist",
+        "layers",
+        "severity"
+      ]
+    },
+    "contract-gate": {
+      "fragments": [
+        "config",
+        "failure"
+      ]
+    },
+    "default-reference": {
+      "fragments": [
+        "delegation"
+      ]
+    },
+    "doc-template": {
+      "fragments": [
+        "diagram",
+        "task-doc",
+        "template-gap"
+      ]
+    },
+    "doc-verify": {
+      "fragments": [
+        "canon-map",
+        "grade",
+        "scoring"
+      ]
+    },
+    "drift-check": {
+      "fragments": [
+        "rule"
+      ]
+    },
+    "impact-analysis": {
+      "fragments": [
+        "regression-surface"
+      ]
+    },
+    "ops-doc": {
+      "fragments": [
+        "authoring",
+        "postmortem",
+        "safety"
+      ]
+    },
+    "plain-writing": {
+      "fragments": []
+    },
+    "testing": {
+      "fragments": [
+        "case-source",
+        "integration",
+        "llm-cost",
+        "run"
+      ]
+    },
+    "theme-apply": {
+      "fragments": [
+        "apply",
+        "spec"
+      ]
+    },
+    "traceability": {
+      "fragments": [
+        "conflict",
+        "coverage",
+        "id-system",
+        "level",
+        "revert-scope",
+        "tagging",
+        "unit-state"
+      ]
+    },
+    "usecase": {
+      "fragments": [
+        "figure-scope",
+        "granularity",
+        "rule-level"
+      ]
+    }
+  },
+  "agents": {
+    "gatekeeper": {
+      "fragments": [
+        "doc-verify/grade"
+      ],
+      "$note": "각 커맨드의 entry.content 도 읽는다. 채점은 하지 않는다"
+    },
+    "reviewer": {
+      "fragments": [
+        "code-review/layers",
+        "code-review/severity",
+        "code-graph/query"
+      ]
+    },
+    "verifier": {
+      "fragments": [
+        "testing/run"
+      ]
+    },
+    "explorer": {
+      "fragments": []
+    },
+    "builder": {
+      "fragments": []
+    }
+  },
+  "direct_fragments": {
+    "theme-apply/spec": "사용자가 /flow:theme 대신 스킬을 직접 부른다 (v1 커맨드를 흡수했다)",
+    "theme-apply/apply": "같음",
+    "ops-doc/authoring": "운영 문서를 쓸 때 사용자가 직접 부른다"
+  }
 }
