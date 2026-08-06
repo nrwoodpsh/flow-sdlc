@@ -35,10 +35,15 @@
 #   `# limit: <못 막는 것> | <왜>`
 #
 # @flow-shell-rules v1
-# rule: bash-write-redirect | block | `>` · `>>` 로 소스 파일에 쓰는 것 | 리다이렉션 대상은 토크나이저가 세그먼트 경계로 써서 버린다 — 명령 이름 목록으로 표현할 수 없다
-# rule: bash-write-command | block | `tee` · `sed -i` 계열로 소스 파일을 고치는 것 | 어느 인자가 파일인지가 명령마다 달라 인자 해석이 필요하다
-# limit: `python -c "open('src/a.ts','w')"` | 경로가 코드 안에 있어 셸이 알 수 없다
-# limit: `eval` · 변수로 쪼갠 경로 · 스크립트 파일에 써서 실행 | 셸을 해석해야 한다. 훅이 할 일이 아니다
+# rule: bash-write-redirect | block | 리다이렉션으로 소스 파일에 쓰는 것 — `>` · `>>` · noclobber 무시 형태 | 리다이렉션 대상은 토크나이저가 세그먼트 경계로 써서 버린다 — 명령 이름 목록으로 표현할 수 없다
+# rule: bash-write-command | block | 파일을 만드는 명령으로 소스를 쓰는 것 — tee · sed -i · gsed -i · perl -i · cp · mv · ln · install · truncate · dd(of=) | 어느 인자가 파일인지가 명령마다 달라(전부/마지막/of=) 인자 해석이 필요하다
+# rule: word-split-quotes | block | 낱말 안에 인용을 끼워 명령을 쪼개는 것 — `git p"u"sh` · `gh "pr" merge` | 셸의 단어 분리 규칙(인용은 단어 경계가 아니다)을 구현해야 판정된다. 목록으로 표현할 수 없다
+# limit: `python -c "open('src/a.ts','w')"` · node -e · awk 의 `print > f` | 경로가 코드 안에 있어 셸이 알 수 없다
+# limit: 목록에 없는 파일 생성 명령 — rsync · curl -o · wget -O · patch | 셸을 해석하지 않고 이름으로 판정하므로 목록 밖은 통과한다. 한 줄 더하면 잡힌다
+# limit: 대상이 디렉터리인 복사 — `cp a b dir/` | 그 안에 만들 파일 이름을 알 수 없다
+# limit: 심볼릭 링크 우회 | 게이트는 경로 문자열만 정규화하고 realpath 는 안 쓴다 (링크가 정상인 자리가 있다)
+# limit: ANSI-C 인용 — `git $'p\x75sh'` | 낱말은 제대로 나누지만 `\x75` 같은 이스케이프를 값으로 풀지 않는다. 풀려면 셸의 인용 해석기를 다 구현해야 한다
+# limit: `eval` · 변수로 쪼갠 경로 · 스크립트 파일에 써서 실행 · 별칭 | 셸을 해석해야 한다. 훅이 할 일이 아니다
 # limit: MCP 파일 도구 | matcher 가 도구 이름이라 훅이 아예 안 돈다
 # limit: 사람이 편집기로 고치는 것 | 훅은 Claude Code 세션에만 걸린다
 # @flow-shell-rules-end
@@ -230,17 +235,65 @@ EOF
 #   SB — 인용 안 내용을 공백으로 바꾼 세그먼트. **명령을 찾는다.**
 #   SU — 인용 기호만 뗀 세그먼트. **플래그 값을 본다** (`-X \'POST\'`).
 # 플래그를 명령 전체에서 찾으면 다른 세그먼트의 `-f` 가 얹혀 과차단이 난다 — 세그먼트별로 본다.
-SB=() ; SU=() ; SP_=() ; b= ; u= ; pre=
+#   SW — **낱말 목록**. 셸의 단어 분리를 그대로 흉내낸다. 명령·서브커맨드를 여기서 찾는다.
+#
+# ── SW 를 왜 더했나 (반증이 뚫은 구멍) ────────────────────────────
+# 원래는 낱말도 SB 에서 뽑았다. SB 는 인용 **내용을 공백으로** 바꾸므로
+#   `git p"u"sh`  →  SB `git p sh`  →  낱말 `p`·`sh`  →  push 규칙이 안 맞는다
+# 인데 셸은 그대로 `git push` 를 실행한다. 한 글자 인용으로 `reset --hard` 까지 뚫렸다.
+#
+# **셸의 실제 규칙은 인용이 단어 경계가 아니라는 것이다.**
+#   `git p"u"sh`            → 한 낱말 `push`      (명령이다)
+#   `git commit -m "git push"` → 낱말 `git push`  (한 낱말이니 명령 이름이 아니다 — 데이터다)
+# 그래서 **단어를 먼저 나누고 각 낱말 안에서 인용을 벗긴다.** 두 경우가 이것으로 갈린다.
+# 인용을 공백으로 바꾼 뒤 단어를 나누면 갈릴 수가 없다 — 그게 구멍의 원인이었다.
+#
+# SB·SU·세그먼트 분리·strip_heredoc·shell_payload 는 **그대로 둔다**(케이스가 거기 박혀 있다).
+SB=() ; SU=() ; SW=() ; SP_=() ; b= ; u= ; pre= ; cw= ; hasw= ; segw= ; W=
 # `${b//[[:space:]]/}` 는 bash 3.2(macOS 기본)에서 2차식이다 — 긴 명령에서 수 초 걸렸다
 #
 # `SP_[i]` 는 **그 세그먼트 앞에 무엇이 있었나**다. `>` 면 이 세그먼트가 리다이렉션 대상이다.
 # 토크나이저는 `>` 를 세그먼트 경계로 쓰고 버리므로, 버리기 전에 표시만 남긴다 —
 # 세그먼트를 나누는 방식은 v1 그대로다(케이스가 그것에 박혀 있다).
-push_seg() { case "$b" in *[![:space:]]*) SB+=("$b"); SU+=("$u"); SP_+=("$pre") ;; esac; b= ; u= ; pre= ; }
+USEP=$'\037'
 
+# 낱말 목록(USEP 로 이은 것)을 하나씩 꺼내는 틀. **낱말 안에 공백이 있을 수 있다**
+# (`-m "두 낱말"` 은 한 낱말이다) — 공백으로 자르면 안 되므로 USEP 로만 자른다.
+next_word() {   # <남은 목록> → NW=낱말 · NREST=나머지.  더 없으면 1
+  local rest=$1
+  while [ -n "$rest" ]; do
+    rest=${rest#"$USEP"}
+    NW=${rest%%"$USEP"*}
+    case "$rest" in *"$USEP"*) NREST=${rest#"$NW"} ;; *) NREST= ;; esac
+    [ -n "$NW" ] && return 0
+    rest=$NREST
+  done
+  NW= ; NREST= ; return 1
+}
+
+# 낱말 하나를 닫는다. `hasw` 가 따로 있는 이유: `""` 는 **빈 낱말**이라 내용이 없어도
+# 낱말 하나가 생긴다. 그래야 `git pu""sh` 가 `pu`+`sh` 로 갈리지 않고 한 낱말 `push` 가 된다.
+flush_word() {
+  if [ -n "$hasw" ]; then
+    W="$W$USEP$cw"
+    [ -n "$cw" ] && segw=1
+  fi
+  cw= ; hasw=
+}
+# 세그먼트를 닫는다. SB 가 공백뿐이어도 **낱말이 있으면** 담는다 —
+# `"git" "push"` 처럼 전부 인용된 세그먼트가 통째로 사라지던 것을 막는다.
+push_seg() {
+  flush_word
+  local keep=$segw
+  case "$b" in *[![:space:]]*) keep=1 ;; esac
+  if [ -n "$keep" ]; then SB+=("$b"); SU+=("$u"); SW+=("$W"); SP_+=("$pre"); fi
+  b= ; u= ; W= ; pre= ; segw=
+}
+
+# @rule word-split-quotes
 scan() {
   local s=$1 i c n q=
-  b= ; u= ; pre=
+  b= ; u= ; pre= ; W= ; cw= ; hasw= ; segw=
   for (( i=0; i<${#s}; i++ )); do
     c=${s:i:1}
     if [ -n "$q" ]; then
@@ -248,20 +301,27 @@ scan() {
       # "인용 안"으로 분류돼 진짜 명령이 사라진다 — 커밋 메시지에 흔한 형태다.
       if [ "$q" = '"' ] && [ "$c" = '\' ]; then
         case ${s:i+1:1} in
-          '"'|'\'|'$'|'`') u+=${s:i+1:1}; b+=' '; i=$((i+1)); continue ;;
+          '"'|'\'|'$'|'`') u+=${s:i+1:1}; b+=' '; cw+=${s:i+1:1}; hasw=1
+                           i=$((i+1)); continue ;;
         esac
       fi
-      if [ "$c" = "$q" ]; then q= ; else b+=' ' ; u+=$c ; fi
+      # 인용 안의 공백은 **낱말을 나누지 않는다** — 그게 인용의 뜻이다.
+      if [ "$c" = "$q" ]; then q= ; else b+=' ' ; u+=$c ; cw+=$c ; hasw=1 ; fi
       continue
     fi
     case "$c" in
-      "'"|'"') q=$c ;;
+      # 인용 기호 자체는 값이 아니지만 **낱말은 시작시킨다**(`""` 가 빈 낱말인 이유)
+      "'"|'"') q=$c ; hasw=1 ;;
       '\') n=${s:i+1:1}; i=$((i+1))
-           [ "$n" = $'\n' ] || { b+="$n"; u+="$n"; } ;;   # 줄이음(`\`+개행)은 접는다
+           [ "$n" = $'\n' ] || { b+="$n"; u+="$n"; cw+="$n"; hasw=1; } ;;   # 줄이음은 접는다
+      # 인용 밖의 공백만 낱말 경계다. SB·SU 에는 v1 처럼 그대로 넣는다
+      ' '|$'\t') flush_word ; b+=$c ; u+=$c ;;
       ';'|'&'|'|'|'('|')'|'{'|'}'|'`'|'<'|$'\n') push_seg ;;
       # `>` 도 v1 과 똑같이 경계다. 다른 것은 **다음 세그먼트에 표시를 남기는 것**뿐이다.
-      '>') push_seg ; pre='>' ;;
-      *) b+=$c ; u+=$c ;;
+      # `>|`(noclobber 무시)는 뒤의 `|` 를 여기서 먹는다 — 안 먹으면 `|` 가 경계가 되어
+      # push_seg 가 `pre` 를 지우고, 리다이렉션 대상 표시가 사라진다(실측으로 뚫렸다).
+      '>') push_seg ; pre='>' ; case ${s:i+1:1} in '|') i=$((i+1)) ;; esac ;;
+      *) b+=$c ; u+=$c ; cw+=$c ; hasw=1 ;;
     esac
   done
   push_seg
@@ -289,16 +349,18 @@ strip_heredoc() {
 stripped=$(strip_heredoc "$cmd") || stripped=$cmd
 scan "$stripped"
 
-LEAD= ; REST=
-seg_cmd() {   # $1 = 세그먼트 → 어느 자리든 basename 이 git·gh 인 토큰을 찾는다
-  local s=$1 tok base
-  while [ -n "$s" ]; do
-    s=${s#"${s%%[![:space:]]*}"}; [ -n "$s" ] || break
-    tok=${s%%[[:space:]]*}; s=${s#"$tok"}
+LEAD= ; RESTW=
+seg_cmd() {   # $1 = 세그먼트의 **낱말 목록**(SW) → 어느 자리든 basename 이 git·gh 인 낱말을 찾는다
+  local rest=$1 tok base
+  while [ -n "$rest" ]; do
+    rest=${rest#"$USEP"}
+    tok=${rest%%"$USEP"*}
+    case "$rest" in *"$USEP"*) rest=${rest#"$tok"} ;; *) rest= ;; esac
+    [ -n "$tok" ] || continue
     tok=${tok#\$}          # `$'...'` 의 앞 `$`
     # 대소문자 무시 볼륨(macOS)에서는 `GIT push` 가 실제로 돈다
     base=$(printf '%s' "${tok##*/}" | tr 'A-Z' 'a-z')
-    case "$base" in git|gh) LEAD=$base; REST=$s; return 0 ;; esac
+    case "$base" in git|gh) LEAD=$base; RESTW=$rest; return 0 ;; esac
   done
   return 1
 }
@@ -329,26 +391,41 @@ done
 # `PreToolUse` 의 matcher 는 도구 이름이라 `Write`·`Edit` 훅은 `cat > src/a.ts` 를 아예 못 본다.
 # 여기서 대상 경로만 뽑아 **같은 게이트**에 물어본다 — 조건을 두 번 적으면 두 판정이 어긋난다.
 #
-# 파일을 쓰는 명령 목록. 늘리는 비용이 한 줄이다.
-#   `<이름> <반드시 있어야 하는 플래그 정규식(없으면 -)>`
-# JSON 이 아니라 여기 있는 이유는 머리말 `@flow-shell-rules` 에 적었다 —
-# 어느 인자가 파일인지가 명령마다 달라서 목록만으로 안 된다.
-WRITE_CMDS='tee -
-sed (^|[[:space:]])-i([^a-zA-Z]|$)
-perl (^|[[:space:]])-[a-zA-Z]*i[a-zA-Z]*([[:space:]]|$)
-gsed (^|[[:space:]])-i([^a-zA-Z]|$)'
+# 파일을 쓰는 명령 목록. **늘리는 비용이 한 줄이다.**
+#   `<이름> <반드시 있어야 하는 플래그 정규식(없으면 -)> <대상 위치>`
+# 대상 위치 — 어느 인자가 파일인지가 명령마다 다르다. 이게 JSON 이 아니라 셸에 있는 이유고
+# 머리말 `@flow-shell-rules` 의 `bash-write-command` 가 그 이유를 적어 둔다.
+#   all   플래그 아닌 낱말 **전부** (여러 파일을 받는 것 — tee · sed -i)
+#   last  플래그 아닌 **마지막** 낱말 (원본→대상 형태 — cp · mv · ln · install)
+#   of    `of=` 값 (dd)
+#
+# `last` 를 쓰는 이유: `cp src/a.ts /tmp/backup.ts` 에서 원본까지 대상으로 뽑으면
+# **읽기만 하는 복사가 막힌다.** 과차단은 사람이 훅을 꺼 버리게 만든다.
+WRITE_CMDS='tee - all
+sed (^|[[:space:]])-i([^a-zA-Z]|$) all
+gsed (^|[[:space:]])-i([^a-zA-Z]|$) all
+perl (^|[[:space:]])-[a-zA-Z]*i[a-zA-Z]*([[:space:]]|$) all
+cp - last
+mv - last
+ln - last
+install - last
+truncate - last
+dd - of'
 
-seg_writer() {   # $1 = 세그먼트(SB) → 파일을 쓰는 명령이면 WREST 에 그 뒤를 담는다
-  local s=$1 tok base name flag
-  while [ -n "$s" ]; do
-    s=${s#"${s%%[![:space:]]*}"}; [ -n "$s" ] || break
-    tok=${s%%[[:space:]]*}; s=${s#"$tok"}
-    base=$(printf '%s' "${tok##*/}" | tr 'A-Z' 'a-z')
-    while IFS=' ' read -r name flag; do
+seg_writer() {   # $1 = 세그먼트의 낱말 목록(SW) → 파일을 쓰는 명령이면 WREST·WMODE 를 담는다
+  local rest=$1 base name flag mode hay
+  while next_word "$rest"; do
+    rest=$NREST
+    base=$(printf '%s' "${NW##*/}" | tr 'A-Z' 'a-z')
+    # 플래그 정규식은 `(^|[[:space:]])-i…` 처럼 **공백 경계**로 쓰여 있다. 낱말 목록은
+    # USEP 로 이어져 있어 그대로 대면 `-i` 앞이 공백이 아니라 안 맞는다 — 실제로
+    # `sed -i` 가 조용히 안 잡혔다. 그래서 경계를 공백으로 되돌려 놓고 본다.
+    hay=$(printf '%s' "$rest" | tr '\037' ' ')
+    while IFS=' ' read -r name flag mode; do
       [ -n "$name" ] || continue
       [ "$base" = "$name" ] || continue
-      if [ "$flag" = '-' ] || printf '%s' "$s" | grep -qE -- "$flag"; then
-        WREST=$s; WCMD=$base; return 0
+      if [ "$flag" = '-' ] || printf '%s' "$hay" | grep -qE -- "$flag"; then
+        WREST=$rest; WCMD=$base; WMODE=$mode; return 0
       fi
     done <<EOF
 $WRITE_CMDS
@@ -357,18 +434,21 @@ EOF
   return 1
 }
 
-# 플래그가 아닌 낱말만. **넉넉히 뽑는다** — 게이트가 소스 아닌 것을 걸러 주므로
+# 대상 후보를 뽑는다. **넉넉히 뽑는다** — 게이트가 소스 아닌 것을 걸러 주므로
 # 더 뽑는 것은 무해하고, 덜 뽑는 것은 구멍이다(`sed -e 's/x/y/' f` 의 표현식은 게이트가 통과시킨다).
-plain_words() {
-  local s=$1 tok out=
-  while [ -n "$s" ]; do
-    s=${s#"${s%%[![:space:]]*}"}; [ -n "$s" ] || break
-    tok=${s%%[[:space:]]*}; s=${s#"$tok"}
-    case "$tok" in -*) ;; *) out="$out
-$tok" ;; esac
+# 단 `last` 모드는 반대다 — 거기서 넉넉히 뽑으면 읽기 전용 원본이 막힌다.
+target_words() {   # <낱말 목록> <모드>
+  local rest=$1 mode=$2 out= last=
+  while next_word "$rest"; do
+    rest=$NREST
+    case "$mode" in
+      of) case "$NW" in of=*) printf '%s\n' "${NW#of=}" ;; esac ;;
+      last) case "$NW" in -*) ;; *) last=$NW ;; esac ;;
+      *) case "$NW" in -*) ;; *) printf '%s\n' "$NW" ;; esac ;;
+    esac
   done
-  printf '%s' "${out#
-}"
+  [ "$mode" = last ] && [ -n "$last" ] && printf '%s\n' "$last"
+  return 0
 }
 
 write_targets() {   # 쓰기 대상 후보를 한 줄에 하나씩
@@ -376,17 +456,16 @@ write_targets() {   # 쓰기 대상 후보를 한 줄에 하나씩
   while [ "$i" -lt "${#SB[@]}" ]; do
     # @rule bash-write-redirect
     if [ "${SP_[$i]}" = '>' ]; then
-      t=${SU[$i]}
-      t=${t#"${t%%[![:space:]]*}"}
-      t=${t%%[[:space:]]*}
-      # `2>&1` 의 `&1` 이나 `/dev/null` 은 게이트가 걸러 준다 — 여기서 판정하지 않는다
-      [ -n "$t" ] && printf '%s\n' "$t"
+      # 낱말 목록의 **첫 낱말**이다. SU 를 공백으로 자르면 `> "src/a b.ts"` 가 `src/a` 로 잘린다.
+      if next_word "${SW[$i]}"; then
+        # `2>&1` 의 `&1` 이나 `/dev/null` 은 게이트가 걸러 준다 — 여기서 판정하지 않는다
+        printf '%s\n' "$NW"
+      fi
     fi
     # @rule bash-write-command
-    WREST= ; WCMD=
-    if seg_writer "${SB[$i]}"; then
-      plain_words "$WREST"
-      printf '\n'
+    WREST= ; WCMD= ; WMODE=
+    if seg_writer "${SW[$i]}"; then
+      target_words "$WREST" "$WMODE"
     fi
     i=$((i+1))
   done
@@ -419,16 +498,35 @@ $(write_targets)
 EOF
 fi
 
-words() {   # 옵션(과 값을 먹는 것의 값)을 빼고 낱말만
-  local s=$1 tok out=
-  while [ -n "$s" ]; do
-    s=${s#"${s%%[![:space:]]*}"}; [ -n "$s" ] || break
-    tok=${s%%[[:space:]]*}; s=${s#"$tok"}
-    case "$tok" in
+words() {   # 낱말 목록 → 옵션(과 값을 먹는 것의 값)을 빼고 공백으로 이은 낱말들
+  local rest=$1 out=
+  while next_word "$rest"; do
+    rest=$NREST
+    case "$NW" in
       -c|-C|--git-dir|--work-tree|--namespace|--exec-path|-u|-g|-n|-R|--repo)
-        s=${s#"${s%%[![:space:]]*}"}; s=${s#"${s%%[[:space:]]*}"} ;;
+        next_word "$rest" && rest=$NREST ;;      # 값을 먹는 옵션은 값까지 버린다
       -*) ;;
-      *) out="$out $tok" ;;
+      *) out="$out $NW" ;;
+    esac
+  done
+  printf '%s' "${out# }"
+}
+
+# `on: rest` 규칙(플래그를 보는 것)의 건초더미. **낱말에서 만든다** —
+# 인용이 낱말을 가르지 않으므로 `git commit --no-veri"f"y` 의 `--no-verify` 가 여기 온다.
+#
+# 다만 **값을 먹는 옵션의 값은 뺀다.** `git commit -m "-n 을 쓰지 마세요"` 의 `-n` 은
+# 커밋 메시지고 플래그가 아니다 — 안 빼면 정상 커밋이 막힌다(v1 케이스가 그걸 못 박았다).
+# `-m`·`--message` 를 여기서만 목록에 넣는 이유가 그것이다(`words` 는 손대지 않는다).
+rest_hay() {   # 낱말 목록 → 플래그를 찾을 문자열
+  local rest=$1 out=
+  while next_word "$rest"; do
+    rest=$NREST
+    case "$NW" in
+      -m|--message|-c|-C|--git-dir|--work-tree|--namespace|--exec-path|-u|-g|-R|--repo|-F|--file)
+        out="$out $NW"
+        next_word "$rest" && rest=$NREST ;;
+      *) out="$out $NW" ;;
     esac
   done
   printf '%s' "${out# }"
@@ -456,8 +554,8 @@ ASK_LABEL= ; ASK_ADVICE= ; ASK_WHY=
 
 i=0
 while [ "$i" -lt "${#SB[@]}" ]; do
-  if seg_cmd "${SB[$i]}"; then
-    args=${SU[$i]} ; rest=$REST ; w=$(words "$REST")
+  if seg_cmd "${SW[$i]}"; then
+    args=${SU[$i]} ; rest=$(rest_hay "$RESTW") ; w=$(words "$RESTW")
     j=0
     while [ "$j" -lt "${#RULES[@]}" ]; do
       IFS=$'\037' read -r rid rtool rwords rlevel ron rcs rwhen runless rnot rlabel rwhy radvice <<<"${RULES[$j]}"

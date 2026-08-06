@@ -266,6 +266,49 @@ t 차단 "git push;echo done"
 t 차단 "(git push)"
 t 차단 "git push|cat"
 
+head_ "스캐너 회귀 — 인용 삽입으로 낱말을 쪼개는 것 (반증 H1)"
+# **셸에서 인용은 단어 경계가 아니다.** `git p"u"sh` 는 한 낱말 `push` 다.
+# 원래는 낱말을 SB(인용 내용을 공백으로 바꾼 것)에서 뽑아서 `p`·`sh` 로 갈렸고,
+# `reset --hard`·`commit --no-verify` 까지 한 글자 인용으로 통과했다.
+# 이 케이스들이 "단어를 먼저 나누고 낱말 안에서 인용을 벗긴다"를 지킨다.
+t 차단 'git p"u"sh origin main'
+t 차단 "git p'u'sh origin main"
+t 차단 'git pu""sh origin main'
+t 차단 'git "push"'
+t 차단 'g"i"t push'
+t 차단 'git res"e"t --hard HEAD'
+t 차단 'git commit --no-veri"f"y'
+t 차단 'gh secret "set" X --body y'
+t 차단 'gh "pr" merge 1'
+t 차단 'git "merge" dev'
+t 차단 '"git" "push"'
+t 차단 'git br"a"nch -D feature/x'
+# 반대 방향 — 인용 안의 **한 낱말**은 명령이 아니다. 이게 깨지면 커밋 메시지가 전부 막힌다
+t 통과 'git commit -m "git push"'
+t 통과 'git commit -m "git push 하지 마세요"'
+t 통과 'echo "git push"'
+t 통과 'echo "git reset --hard"'
+t 통과 'git commit -m "-n 을 쓰지 마세요"'
+t 통과 'git commit -m "--no-verify 는 쓰지 않는다"'
+t 통과 'nice -n 10 git commit -m x'
+t 통과 'git commit -m "gh secret set"'
+t 통과 'git commit --message "-n"'
+t 통과 'git log --grep="reset --hard"'
+# 이스케이프도 낱말 안이면 붙는다 (`\` 를 낱말 경계로 보면 또 갈린다)
+t 차단 'g\it push'
+t 차단 'git pus\h origin'
+t 차단 'git commit --no\-verify'
+t 차단 'gh api --met"h"od POST /x'
+
+# **여기 둘은 남은 한계를 못 박는 케이스다.** 고쳐지면 이 기대값을 바꿔라 —
+# 지금 통과하는 것이 사고가 아니라 적어 둔 한계임을 테스트가 증명해야 한다.
+# (guard-rules.json 의 limits · guard-danger.sh 머리말의 limit 줄과 짝이다)
+t 통과 "git \$'p\\x75sh'"       "[한계] ANSI-C 인용 — 셸은 push 로 실행한다"
+t 통과 'p=push; git $p'         "[한계] 변수로 쪼갠 명령"
+# 반대로 이건 **새로 생긴 과차단**이다. 낱말별로 인용하면 실행과 구별할 수 없다
+t 차단 'echo "git" "push"'      "[과차단] 낱말별 인용은 막는다"
+t 통과 'echo "git push"'        "한 낱말로 인용하면 통과한다"
+
 head_ "스캐너 회귀 — 과차단 (다른 세그먼트·인용 안의 플래그가 얹히면 안 된다)"
 t 통과 "git clean --dry-run && rm -f tmp.txt"
 t 통과 "git clean -n && docker build -f Dockerfile ."
@@ -608,6 +651,38 @@ gt 통과 "src/a.ts" "$P2" "File Map 이 담은 경로"
 gt 차단 "src/b.ts" "$P2" "File Map 에 없는 경로"
 gt 통과 "spike/a.ts" "$P2" "spike 면제는 그대로"
 
+head_ "게이트 — 면제 우회 (반증 C1) · 경로 정규화"
+# **면제는 접두어로 판정하므로 `..` 를 먼저 풀어야 한다.** 안 풀면
+#   `doc/../src/b.ts`   → 접두어 `doc/` → "소스 아님" 으로 통과
+#   `spike/../src/b.ts` → `spike/` 면제로 통과
+# 인데 디스크에는 `src/b.ts` 가 써진다. 게이트의 존재 이유가 문자 셋으로 무력화됐다.
+gt 차단 "doc/../src/b.ts"           "$P2" "doc/../ 로 면제를 훔친다"
+gt 차단 "spike/../src/b.ts"         "$P2" "spike/../ 로 면제를 훔친다"
+gt 차단 ".claude/../src/b.ts"       "$P2" ".claude/../ 로 면제를 훔친다"
+gt 차단 ".github/../src/b.ts"       "$P2" ".github/../ 로 면제를 훔친다"
+gt 차단 "src/../src/b.ts"           "$P2" "빙 돌아온 경로"
+gt 차단 "./src/b.ts"                "$P2" "./ 접두어"
+gt 차단 "src/./b.ts"                "$P2" "중간의 ./"
+gt 차단 "src/x/../b.ts"             "$P2" "중간의 ../"
+# 정규화 뒤에도 통과해야 하는 것 — 면제가 진짜 면제인 경우
+gt 통과 "spike/./probe.ts"          "$P2" "spike/./ 는 여전히 면제"
+gt 통과 "doc/./notes.md"            "$P2" "doc/./ 는 여전히 소스 아님"
+gt 통과 "src/../doc/notes.md"       "$P2" "돌아서 문서로 가면 소스 아님"
+gt 통과 "src/../src/a.ts"           "$P2" "돌아서 **선언된** 경로로 가면 통과"
+# `lstrip('./')` 부작용 (반증 M2) — 앞쪽 `.` 을 전부 먹어 `.claude/x` → `claude/x` 가 됐다.
+# 그래서 dotfile 경로가 소스로 오분류돼 **정상 설정 파일 쓰기가 막혔다.**
+gt 통과 ".claude/settings.json"     "$P2" ".claude/ 는 소스 아님 (오분류 회귀)"
+gt 통과 ".github/workflows/ci.yml"  "$P2" ".github/ 는 소스 아님"
+# `.gitignore` 는 **소스로 본다** — drift-hook.sh 의 규칙 ③(doc·spike·.claude·.github 밖이고
+# .md 아님)과 같은 판정이다. 두 훅이 갈리면 "커밋은 막히는데 쓰기는 통과" 가 된다.
+gt 차단 ".gitignore"                "$P2" "점 파일도 규칙 ③ 을 따른다 (drift 훅과 같은 판정)"
+# 상대 경로로 리포를 탈출하면 **통과가 아니라 거부**다
+gt 차단 "../../etc/passwd"          "$P2" "리포 밖으로 탈출"
+gt 차단 "../sibling/x.ts"           "$P2" "옆 디렉터리로 탈출"
+# 절대 경로로 리포 밖은 이 층의 범위가 아니다 (`/tmp` 쓰기를 막으면 정상 작업이 걸린다)
+gt 통과 "/tmp/scratch.ts"           "$P2" "리포 밖 절대 경로는 범위 밖"
+gt 차단 "$P2/src/b.ts"              "$P2" "리포 안 절대 경로는 판정한다"
+
 head_ "게이트 — 요구 태그가 템플릿 그대로면 태그가 없는 것이다"
 P3="$TMP/gate-notag"; mkproj_ "$P3" yes yes "src/a.ts" no
 gt 차단 "src/a.ts" "$P3" "requirement 가 {{…}} 다"
@@ -689,6 +764,24 @@ wt "src/a.ts"           'cat <<EOF > src/a.ts
 x
 EOF'
 
+head_ "Bash 경유 쓰기 — 파일을 만드는 다른 명령 (반증 H2)"
+# `WRITE_CMDS` 가 tee·sed -i 넷뿐이라 아래가 **게이트를 아예 안 불렀다.**
+# 판정 결과로는 "통과"로 보여서 흔적이 없었다 — 그래서 추출 자체를 케이스로 박는다.
+wt "src/a.ts"           'cp a.ts src/a.ts'
+wt "src/a.ts"           'mv /tmp/x src/a.ts'
+wt "src/a.ts"           'ln -sf /tmp/x src/a.ts'
+wt "src/a.ts"           'install -m644 a.ts src/a.ts'
+wt "src/a.ts"           'truncate -s0 src/a.ts'
+wt "src/a.ts"           'dd of=src/a.ts if=/dev/zero'
+wt "src/a.ts"           'echo x >| src/a.ts'
+# `last` 모드 — 원본까지 뽑으면 **읽기만 하는 복사가 막힌다.** 대상만 뽑는다
+wt "/tmp/backup.ts"     'cp src/a.ts /tmp/backup.ts'
+wt "/tmp/b"             'mv src/a.ts /tmp/b'
+wt ""                   'cat src/a.ts'
+wt "b,/dev/null"        'cp -r a b && echo done > /dev/null'
+# 인용된 경로도 한 낱말이다 — 공백으로 자르면 `src/a` 로 잘려 게이트가 딴 파일을 본다
+wt "src/a b.ts"         'cat x > "src/a b.ts"'
+
 head_ "Bash 경유 쓰기 — 게이트에 넘긴다 (guard → gate)"
 bw() {  # <기대> <명령> <프로젝트>
   local out rc got
@@ -711,5 +804,56 @@ bw 통과 'cat src/b.ts'              "$P2"
 bw 통과 'cat x > src/b.ts'          "$P0"
 # 되돌릴 수 없는 명령 차단은 그대로다 (게이트가 얹혀도 안 가려진다)
 bw 차단 'git push'                  "$P2"
+# 반증 C1 — Bash 경로에서도 `..` 우회가 막혀야 한다 (Write 경로만 고치면 반쪽이다)
+bw 차단 'echo x > doc/../src/b.ts'      "$P2"
+bw 차단 'echo x > spike/../src/b.ts'    "$P2"
+bw 차단 'cp a.ts doc/../src/b.ts'       "$P2"
+bw 통과 'echo x > src/../spike/z.ts'    "$P2"
+# 반증 H2 — 파일 만드는 명령도 게이트를 지난다
+bw 차단 'cp a.ts src/b.ts'              "$P2"
+bw 차단 'mv /tmp/x src/b.ts'            "$P2"
+bw 차단 'dd of=src/b.ts if=/dev/zero'   "$P2"
+bw 차단 'truncate -s0 src/b.ts'         "$P2"
+bw 차단 'ln -sf /tmp/x src/b.ts'        "$P2"
+bw 차단 'install -m644 a.ts src/b.ts'   "$P2"
+bw 차단 'echo x >| src/b.ts'            "$P2"
+bw 통과 'cp src/a.ts /tmp/backup.ts'    "$P2"
+bw 통과 'mv src/a.ts /tmp/b'            "$P2"
+
+# ══════════════════════════════════════════════════════════
+# check-guard-canon.sh — 정본이 없을 때 **조용하지 않은가** (반증 M1)
+# 가드는 fail-open 을 유지한다(막으면 사람이 훅을 지우고, 그러면 층이 영구히 없어진다).
+# 대신 "조용함"을 없앤다 — 세션 시작에 한 번 크게 알린다.
+# ══════════════════════════════════════════════════════════
+head_ "check-guard-canon.sh — 정본 부재를 세션 시작에 알리나"
+CGC="$FLOW/hooks/scripts/check-guard-canon.sh"
+if [ ! -f "$CGC" ]; then
+  no_ "check-guard-canon.sh 가 없다 — 가드가 조용히 꺼지는 것을 알릴 곳이 없다"
+else
+  bash -n "$CGC" && ok_ "문법" || no_ "문법"
+  grep -q 'check-guard-canon' "$HJ" && ok_ "SessionStart 에 배선" || no_ "hooks.json 에 배선이 없다"
+  # 정상 상태 — 아무 말도 하지 않아야 한다 (매 세션 잔소리는 사람이 무시하게 만든다)
+  cout=$(bash "$CGC" 2>&1); crc=$?
+  eq_ 0 "$crc" "막지 않는다 (exit 0)"
+  [ -z "$cout" ] && ok_ "정본이 멀쩡하면 조용하다" || no_ "정상인데 말을 걸었다" "$cout"
+  # 정본 없음 — 크게 알려야 한다
+  cout=$(FLOW_GUARD_RULES="$TMP/no-rules.json" bash "$CGC" 2>&1); crc=$?
+  eq_ 0 "$crc" "정본 없어도 막지 않는다 (exit 0)"
+  printf '%s' "$cout" | grep -q '아무것도 막지 않습니다' \
+    && ok_ "차단 목록 부재를 알린다" || no_ "차단 목록 부재를 안 알린다" "$cout"
+  printf '{ broken' > "$TMP/broken-rules.json"
+  cout=$(FLOW_GUARD_RULES="$TMP/broken-rules.json" bash "$CGC" 2>&1)
+  printf '%s' "$cout" | grep -q '깨졌습니다' \
+    && ok_ "차단 목록 손상을 알린다" || no_ "손상을 안 알린다" "$cout"
+  printf '{"rules":[]}' > "$TMP/empty-rules.json"
+  cout=$(FLOW_GUARD_RULES="$TMP/empty-rules.json" bash "$CGC" 2>&1)
+  printf '%s' "$cout" | grep -q '깨졌습니다' \
+    && ok_ "빈 규칙 목록을 손상으로 본다" || no_ "빈 목록을 정상으로 봤다" "$cout"
+  cout=$(FLOW_TOPOLOGY="$TMP/no-topo.json" bash "$CGC" 2>&1)
+  printf '%s' "$cout" | grep -q '게이트 판정 근거' \
+    && ok_ "게이트 정본 부재를 알린다" || no_ "게이트 정본 부재를 안 알린다" "$cout"
+  # 가드 본체와 **같은 순서**로 정본을 찾나 — 다르면 "있다"고 알리는데 훅은 못 찾는다
+  grep -q 'CLAUDE_PLUGIN_ROOT' "$CGC" && ok_ "훅과 같은 탐색 순서" || no_ "탐색 순서가 다르다"
+fi
 
 summary_ "flow 훅"

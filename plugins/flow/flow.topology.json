@@ -415,8 +415,6 @@
           "code-review",
           "plain-writing",
           "default-reference",
-          "code-graph",
-          "impact-analysis",
           "doc-template"
         ],
         "fragments": [
@@ -426,12 +424,19 @@
           "testing/case-source",
           "contract-gate/failure",
           "code-review/checklist",
-          "default-reference/delegation",
-          "impact-analysis/regression-surface",
-          "code-graph/query",
-          "doc-template/task-doc",
-          "testing/llm-cost"
-        ]
+          "default-reference/delegation"
+        ],
+        "conditional": {
+          "impact-analysis/regression-surface": "기존 코드를 고칠 때만",
+          "code-graph/query": "기존 코드를 고칠 때만",
+          "doc-template/task-doc": "task 문서를 고칠 때만",
+          "testing/llm-cost": "LLM 기능일 때만"
+        },
+        "$note": "fragments 는 늘 읽는다. conditional 은 그 조건일 때만 — 순수 신규 구현은 안 읽는다",
+        "conditional_skills": {
+          "impact-analysis": "기존 코드를 고칠 때만",
+          "code-graph": "기존 코드를 고칠 때만"
+        }
       },
       "procedures": [
         "build/schema-change",
@@ -727,64 +732,82 @@
       ]
     }
   },
+  "$skills-note": [
+    "`grade` 는 description 문형의 정본이다. SKILL.md frontmatter 의 비표준 필드가",
+    "Claude Code 에서 경고 없이 허용되는지 확인이 안 돼 설계가 지시한 대체 자리에 뒀다",
+    "(01.architecture.md `description 등급`). `lint.py` 의 skill-description-grade 가 읽는다.",
+    "  호출-전용  커맨드가 싣는다 — description 이 싣는 커맨드를 열거한다",
+    "  자율      사용자·작업 성질로 발동한다 — 커맨드 열거로 끝내지 않는다",
+    "  기본값     조건에 맞는 커맨드가 전부 싣는다 — 열거하지 않는다(부분 열거는 거짓말이 된다)"
+  ],
   "skills": {
     "code-graph": {
       "fragments": [
         "query",
         "service-boundary"
-      ]
+      ],
+      "grade": "호출-전용"
     },
     "code-review": {
       "fragments": [
         "checklist",
         "layers",
         "severity"
-      ]
+      ],
+      "grade": "호출-전용"
     },
     "contract-gate": {
       "fragments": [
         "config",
         "failure"
-      ]
+      ],
+      "grade": "호출-전용"
     },
     "default-reference": {
       "fragments": [
         "delegation"
-      ]
+      ],
+      "grade": "호출-전용"
     },
     "doc-template": {
       "fragments": [
         "diagram",
         "task-doc",
         "template-gap"
-      ]
+      ],
+      "grade": "호출-전용"
     },
     "doc-verify": {
       "fragments": [
         "canon-map",
         "grade",
         "scoring"
-      ]
+      ],
+      "grade": "호출-전용"
     },
     "drift-check": {
       "fragments": [
         "rule"
-      ]
+      ],
+      "grade": "호출-전용"
     },
     "impact-analysis": {
       "fragments": [
         "regression-surface"
-      ]
+      ],
+      "grade": "호출-전용"
     },
     "ops-doc": {
       "fragments": [
         "authoring",
         "postmortem",
         "safety"
-      ]
+      ],
+      "grade": "자율"
     },
     "plain-writing": {
-      "fragments": []
+      "fragments": [],
+      "grade": "기본값"
     },
     "testing": {
       "fragments": [
@@ -792,13 +815,15 @@
         "integration",
         "llm-cost",
         "run"
-      ]
+      ],
+      "grade": "호출-전용"
     },
     "theme-apply": {
       "fragments": [
         "apply",
         "spec"
-      ]
+      ],
+      "grade": "자율"
     },
     "traceability": {
       "fragments": [
@@ -809,14 +834,16 @@
         "revert-scope",
         "tagging",
         "unit-state"
-      ]
+      ],
+      "grade": "호출-전용"
     },
     "usecase": {
       "fragments": [
         "figure-scope",
         "granularity",
         "rule-level"
-      ]
+      ],
+      "grade": "호출-전용"
     }
   },
   "agents": {
@@ -849,5 +876,29 @@
     "theme-apply/spec": "사용자가 /flow:theme 대신 스킬을 직접 부른다 (v1 커맨드를 흡수했다)",
     "theme-apply/apply": "같음",
     "ops-doc/authoring": "운영 문서를 쓸 때 사용자가 직접 부른다"
+  },
+  "output_templates": {
+    "$note": [
+      "스킬 조각의 `출력 형식` ↔ 템플릿 짝의 정본. v1 은 이 짝을 lint 스크립트 안에",
+      "손으로 열거했다 — 정본이 둘이었다. 경로는 plugins/flow 기준이다.",
+      "  문서    문서 한 편을 낸다 — 이름 대조 + 템플릿의 필수 절이 다 있나",
+      "  덧붙임  남의 문서에 절을 덧붙인다 — 이름 대조만 (남의 필수 절까지 요구하지 않는다)",
+      "  콘솔    문서가 아니다 — 대조할 템플릿이 없다는 선언이다"
+    ],
+    "skills/code-review/references/layers.md": "06.review",
+    "skills/theme-apply/references/apply.md": {
+      "template": "15.theme",
+      "relation": "덧붙임",
+      "$why": "스펙 문서에 적용 기록을 이어 쓴다 — 문서를 새로 만들지 않는다"
+    },
+    "skills/impact-analysis/references/regression-surface.md": {
+      "template": "02.task-doc",
+      "relation": "덧붙임",
+      "$why": "task 문서에 회귀 표면 절을 덧붙인다"
+    },
+    "skills/doc-verify/references/scoring.md": {
+      "relation": "콘솔",
+      "$why": "채점 결과를 터미널에 낸다 — 문서 산출물이 아니다"
+    }
   }
 }

@@ -1,0 +1,16 @@
+{
+  "extraKnownMarketplaces": {
+    "flow-sdlc": {
+      "source": {
+        "source": "github",
+        "repo": "nrwoodpsh/flow-sdlc"
+      }
+    }
+  },
+  "enabledPlugins": [
+    {
+      "marketplace": "flow-sdlc",
+      "plugin": "flow"
+    }
+  ]
+}

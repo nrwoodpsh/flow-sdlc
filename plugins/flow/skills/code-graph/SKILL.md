@@ -1,6 +1,6 @@
 ---
 name: code-graph
-description: 코드를 그래프로 질의해 교차 파일 영향·데이터 흐름을 찾는다. Joern 있으면 전이 추적, 없으면 LSP·grep 축소 모드. /flow:design·/flow:build·/flow:review·/flow:commit 이 쓴다.
+description: 코드를 그래프로 질의해 교차 파일 영향·데이터 흐름을 찾는다. Joern 있으면 전이 추적, 없으면 LSP·grep 축소 모드. /flow:build(기존 코드를 고칠 때)·/flow:review·/flow:commit 이 쓴다.
 ---
 
 # 코드 그래프 질의

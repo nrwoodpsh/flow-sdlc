@@ -116,8 +116,9 @@ guard-danger.sh 머리말            예외 로직이 붙은 셸 규칙 (고정 
 
 | 규칙 | 등급 | 무엇을 막나 | 왜 셸에 있나 |
 |:--|:--|:--|:--|
-| `bash-write-redirect` | block | `>` · `>>` 로 소스 파일에 쓰는 것 | 리다이렉션 대상은 토크나이저가 세그먼트 경계로 써서 버린다 — 명령 이름 목록으로 표현할 수 없다 |
-| `bash-write-command` | block | `tee` · `sed -i` 계열로 소스 파일을 고치는 것 | 어느 인자가 파일인지가 명령마다 달라 인자 해석이 필요하다 |
+| `bash-write-redirect` | block | 리다이렉션으로 소스 파일에 쓰는 것 — `>` · `>>` · noclobber 무시 형태 | 리다이렉션 대상은 토크나이저가 세그먼트 경계로 써서 버린다 — 명령 이름 목록으로 표현할 수 없다 |
+| `bash-write-command` | block | 파일을 만드는 명령으로 소스를 쓰는 것 — tee · sed -i · gsed -i · perl -i · cp · mv · ln · install · truncate · dd(of=) | 어느 인자가 파일인지가 명령마다 달라(전부/마지막/of=) 인자 해석이 필요하다 |
+| `word-split-quotes` | block | 낱말 안에 인용을 끼워 명령을 쪼개는 것 — `git p"u"sh` · `gh "pr" merge` | 셸의 단어 분리 규칙(인용은 단어 경계가 아니다)을 구현해야 판정된다. 목록으로 표현할 수 없다 |
 
 ### 못 막는 것
 
@@ -125,16 +126,24 @@ guard-danger.sh 머리말            예외 로직이 붙은 셸 규칙 (고정 
 
 | 무엇 | 왜 |
 |:--|:--|
-| `python -c "open('src/a.ts','w')"` | 경로가 코드 안에 있어 셸이 알 수 없다 |
-| `eval` · 변수로 쪼갠 경로 · 스크립트 파일에 써서 실행 | 셸을 해석해야 한다. 훅이 할 일이 아니다 |
+| `python -c "open('src/a.ts','w')"` · node -e · awk 의 `print > f` | 경로가 코드 안에 있어 셸이 알 수 없다 |
+| 목록에 없는 파일 생성 명령 — rsync · curl -o · wget -O · patch | 셸을 해석하지 않고 이름으로 판정하므로 목록 밖은 통과한다. 한 줄 더하면 잡힌다 |
+| 대상이 디렉터리인 복사 — `cp a b dir/` | 그 안에 만들 파일 이름을 알 수 없다 |
+| 심볼릭 링크 우회 | 게이트는 경로 문자열만 정규화하고 realpath 는 안 쓴다 (링크가 정상인 자리가 있다) |
+| ANSI-C 인용 — `git $'p\x75sh'` | 낱말은 제대로 나누지만 `\x75` 같은 이스케이프를 값으로 풀지 않는다. 풀려면 셸의 인용 해석기를 다 구현해야 한다 |
+| `eval` · 변수로 쪼갠 경로 · 스크립트 파일에 써서 실행 · 별칭 | 셸을 해석해야 한다. 훅이 할 일이 아니다 |
 | MCP 파일 도구 | matcher 가 도구 이름이라 훅이 아예 안 돈다 |
 | 사람이 편집기로 고치는 것 | 훅은 Claude Code 세션에만 걸린다 |
-| 셸 우회 — eval "git pu""sh" · P=push; git $P · 스크립트 파일에 써서 실행 | — |
+| 셸 우회 — eval "git pu" "sh" · P=push; git $P · 스크립트 파일에 써서 실행 · 별칭(git ci) | — |
 | 다른 실행 경로 — python subprocess · MCP 도구 (matcher 가 Bash 라서 훅이 아예 안 돈다) | — |
 | 사람 터미널 — 이 훅은 Claude Code 세션에만 걸린다. Sourcetree·IDE·직접 셸에는 안 걸린다 | — |
 | deny-list 라 목록에 없는 명령은 통과한다. 늘리는 비용을 없앴으니 늘려서 대응한다 | — |
-| 과차단 방향으로 기운 것 — `echo git push`(인용 없이)는 막힌다. 인용하면 통과한다 | — |
+| 과차단 방향으로 기운 것 — `echo git push` 는 막힌다. `echo "git push"`(**한 낱말**로 인용)는 통과하지만 `echo "git" "push"`(낱말별 인용)는 막힌다 — 낱말이 `git`·`push` 로 갈리면 실행과 구별할 수 없다 | — |
 | here-doc 구분자를 못 닫으면 본문을 명령으로 스캔한다(과차단) | — |
+| **쓰기 경로** — 코드 안에 경로가 있는 것은 못 잡는다: `python3 -c "open('src/a.ts','w')"` · node -e · awk 의 `print > f` | — |
+| **쓰기 경로** — 목록에 없는 파일 생성 명령은 통과한다. 잡는 것은 리다이렉션(`>` `>>` `>\|`)과 tee·sed -i·gsed -i·perl -i·cp·mv·ln·install·truncate·dd(of=) 뿐이다. rsync·curl -o·wget -O·patch·git archive 등은 통과한다 — 목록에 한 줄 더하면 잡힌다 | — |
+| **쓰기 경로** — `cp a b dir/` 처럼 대상이 디렉터리면 그 안의 파일 이름을 알 수 없어 통과한다 | — |
+| **쓰기 경로** — 심볼릭 링크로 우회하는 것은 못 잡는다. 게이트는 경로 문자열만 정규화하고 realpath 는 안 쓴다(테스트 환경의 /tmp↔/private/tmp 처럼 링크가 정상인 자리가 있어서다) | — |
 
 생성: `python3 scripts/gen_docs.py --write`
 <!-- /flow:gen guard-table -->

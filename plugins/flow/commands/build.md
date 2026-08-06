@@ -16,8 +16,11 @@ v1 은 `build` 와 `verify unit` 을 갈라 뒀지만 build 루프가 이미 단
 
 | 무엇 | 이름 |
 |:--|:--|
-| 스킬 | `traceability` · `testing` · `contract-gate` · `code-review` · `code-graph` · `impact-analysis` · `doc-template` · `plain-writing` · `default-reference` |
-| 조각 | `traceability/tagging` · `traceability/unit-state` · `testing/run` · `testing/case-source` · `contract-gate/failure` · `code-review/checklist` · `impact-analysis/regression-surface` · `code-graph/query` · `doc-template/task-doc` · `default-reference/delegation` |
+| 스킬 | `traceability` · `testing` · `contract-gate` · `code-review` · `doc-template` · `plain-writing` · `default-reference` |
+| 조각 | `traceability/tagging` · `traceability/unit-state` · `testing/run` · `testing/case-source` · `contract-gate/failure` · `code-review/checklist` · `default-reference/delegation` |
+| 조건부 — **기존 코드를 고칠 때만** | `impact-analysis` · `impact-analysis/regression-surface` · `code-graph` · `code-graph/query` |
+| 조건부 — **task 문서를 고칠 때만** | `doc-template/task-doc` |
+| 조건부 — **LLM 기능일 때만** | `testing/llm-cost` |
 | 에이전트 | `builder`(구현 — **쓰기 권한은 여기 하나**) · `verifier`(실행 판정) · `gatekeeper`(진입 내용 판정) · `explorer`(넓게 읽을 때) |
 | 절차 조각 | `${CLAUDE_PLUGIN_ROOT}/procedures/build/unit-verify.md` · `${CLAUDE_PLUGIN_ROOT}/procedures/build/schema-change.md` |
 

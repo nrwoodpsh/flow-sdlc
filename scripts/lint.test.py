@@ -151,18 +151,63 @@ def _built(corrupt=False):
     return build
 
 
-def _review_skill(sections, fm='output-template: 06.review\n'):
+def _review_skill(sections, pair='06.review'):
+    """출력 형식을 **조각**(`references/`)에 둔다 — v2 가 거기로 내렸다.
+
+    짝은 topology 의 `output_templates` 가 정본이다. `pair=None` 이면 짝을 안 적은 상태다.
+    """
     inner = '\n\n'.join(f'## {s}' for s in sections)
-    body = ("리뷰 결과를 낸다.\n"
-            "\n"
-            "## 출력 형식\n"
-            "\n"
-            f"{F}markdown\n{inner}\n{F}\n"
-            "\n"
-            "## 경계\n"
-            "\n"
-            "코드를 고치지 않는다.\n")
-    return _skill('code-review', body, fm)
+    files = {
+        'plugins/flow/skills/code-review/SKILL.md':
+            "---\nname: code-review\n---\n\n# code-review\n\n리뷰 규약이다.\n\n## 경계\n\n"
+            "코드를 고치지 않는다.\n",
+        'plugins/flow/skills/code-review/references/layers.md':
+            ("# 층\n\n리뷰 결과를 낸다.\n\n## 출력 형식\n\n"
+             f"{F}markdown\n{inner}\n{F}\n"),
+    }
+    topo = {'version': 1, 'commands': {}, 'skills': {}}
+    if pair:
+        topo['output_templates'] = {'skills/code-review/references/layers.md': pair}
+    files[TOPO_REL] = json.dumps(topo, ensure_ascii=False, indent=2)
+    return files
+
+
+# ── 커맨드 연결 절 ↔ topology loads · gatekeeper 위임 ──
+
+def _cmd_topo(loads, content=(), name='build'):
+    return {TOPO_REL: json.dumps(
+        {'version': 1, 'skills': {'testing': {'fragments': ['run', 'llm-cost']},
+                                  'code-graph': {'fragments': ['query']}},
+         'commands': {name: {'order': 1, 'phase': '구현', 'after': [], 'next': [],
+                             'entry': {'machine': [], 'content': list(content),
+                                       'promise': []},
+                             'loads': loads, 'procedures': []}}},
+        ensure_ascii=False, indent=2)}
+
+
+def _cmd_md(rows, tail='', name='build'):
+    body = "---\nname: %s\n---\n\n# %s\n\n## 연결\n\n| 무엇 | 이름 |\n|:--|:--|\n" % (name, name)
+    body += ''.join(f"| {lab} | {txt} |\n" for lab, txt in rows)
+    return {f'plugins/flow/commands/{name}.md': body + '\n' + tail + '\n## 경계\n\n끝.\n'}
+
+
+# ── 스킬 등급 · description 양방향 ──
+
+def _graded(grade, desc, loads_skills=('traceability',)):
+    """등급은 topology 가 정본이다. description 문형과 짝지어 본다."""
+    return {
+        TOPO_REL: json.dumps(
+            {'version': 1,
+             'skills': {'traceability': {'fragments': ['level'], 'grade': grade}},
+             'commands': {'prd': {'order': 1, 'phase': '요구', 'after': [], 'next': [],
+                                  'entry': {'machine': [], 'content': [], 'promise': []},
+                                  'loads': {'skills': list(loads_skills), 'fragments': []},
+                                  'procedures': []}}},
+            ensure_ascii=False, indent=2),
+        'plugins/flow/skills/traceability/SKILL.md':
+            f"---\nname: traceability\ndescription: {desc}\n---\n\n"
+            "# traceability\n\n요구 ID 의 정본이다.\n\n## 경계\n\n코드를 고치지 않는다.\n",
+    }
 
 
 CASES = {
@@ -194,6 +239,7 @@ CASES = {
     ),
 
     # ── 출력 형식 ↔ 템플릿 왕복 ──
+    # 출력 형식은 조각에 있다. **SKILL.md 만 스캔하면 여기서 대상 0건이 되어 테스트가 실패한다.**
     'output-sections-exist': (
         {**_review_template(), **_review_skill(['판정', '발견'])},
         # 템플릿에 없는 이름을 지어냈다
@@ -203,6 +249,49 @@ CASES = {
         {**_review_template(), **_review_skill(['판정', '발견'])},
         # `발견`(문서 필수)이 빠졌다 — 그대로 만들면 채점에서 FAIL
         {**_review_template(), **_review_skill(['판정'])},
+    ),
+
+    # ── 커맨드 연결 절 ↔ topology loads ──
+    'command-loads-parity': (
+        {**_cmd_topo({'skills': ['testing'], 'fragments': ['testing/run'],
+                      'conditional': {'testing/llm-cost': 'LLM 기능일 때만'}}),
+         **_cmd_md([('스킬', '`testing`'),
+                    ('조각', '`testing/run`'),
+                    ('조건부 조각', '`testing/llm-cost`(LLM 기능일 때만)')])},
+        # 조건부를 늘 읽는 것과 같은 칸에 적어 **조건이 사라졌다** — 순수 신규에서도 다 읽게 된다
+        {**_cmd_topo({'skills': ['testing'], 'fragments': ['testing/run'],
+                      'conditional': {'testing/llm-cost': 'LLM 기능일 때만'}}),
+         **_cmd_md([('스킬', '`testing`'),
+                    ('조각', '`testing/run` · `testing/llm-cost`')])},
+    ),
+
+    # ── gatekeeper 위임 지시 ──
+    'gatekeeper-delegation': (
+        {**_cmd_topo({'skills': [], 'fragments': []},
+                     content=[{'id': 'contract-followed', 'what': '계약을 따랐나',
+                               'who': 'gatekeeper'}]),
+         **_cmd_md([('스킬', '없다')],
+                   tail="- **내용** — `gatekeeper` 에 넘긴다. 반드시 부른다.\n\n")},
+        # 내용 조건이 있는데 부르라는 지시가 없다 = 게이트가 이름만 남았다 (v1 최대 결함)
+        {**_cmd_topo({'skills': [], 'fragments': []},
+                     content=[{'id': 'contract-followed', 'what': '계약을 따랐나',
+                               'who': 'gatekeeper'}]),
+         **_cmd_md([('스킬', '없다')],
+                   tail="- **내용** — 계약을 따랐는지 이 커맨드가 확인한다.\n\n")},
+    ),
+
+    # ── 스킬 등급 ↔ description 문형 ──
+    'skill-description-grade': (
+        _graded('호출-전용', '요구 ID 체계·태깅의 정본. /flow:prd 가 쓴다.'),
+        # 호출 전용인데 커맨드를 열거하지 않았다 — 일반형은 기계가 대조할 수 없다
+        _graded('호출-전용', '요구 ID 체계·태깅의 정본. 문서를 쓰는 커맨드가 쓴다.'),
+    ),
+
+    # ── description 의 누가 쓴다 — 양방향 ──
+    'skill-description-users': (
+        _graded('호출-전용', '요구 ID 체계의 정본. /flow:prd 가 쓴다.'),
+        # `/flow:prd` 가 안 싣는데 쓴다고 적었다 = 매 턴 실리는 거짓말
+        _graded('호출-전용', '요구 ID 체계의 정본. /flow:prd 가 쓴다.', loads_skills=()),
     ),
 
     # ── 스킬 간 중복 ──

@@ -44,9 +44,9 @@ flow 플러그인 자체를 만드는 리포다. 사용자 프로젝트가 아�
 - **defense-off** (block) — `git commit --no-verify` · `git -c core.hooksPath=…`
 - **external-state** (block) — `gh release create` · `gh api 쓰기` · `gh api graphql mutation` · `gh api 쓰기(필드 플래그)` · `gh workflow run` · `gh pr create` · `gh issue create` · `gh repo create`
 - **judgement** (ask) — `git commit --amend` · `git tag -d` · `git stash pop`
-- **셸 정본** — `bash-write-redirect` · `bash-write-command`
+- **셸 정본** — `bash-write-redirect` · `bash-write-command` · `word-split-quotes`
 
-차단 33건 · 확인 3건 · 셸 2건. 늘리려면 `guard-rules.json` 에 한 줄.
+차단 33건 · 확인 3건 · 셸 3건. 늘리려면 `guard-rules.json` 에 한 줄.
 <!-- /flow:gen guard-summary -->
 
 ## 커밋

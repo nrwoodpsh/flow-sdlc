@@ -1,7 +1,9 @@
 {
   "$note": [
     "훅 배선. **matcher 는 도구 이름이다** — 그래서 어느 훅이 어느 경로를 덮는지가 여기서 결정된다.",
-    "  SessionStart          drift 훅이 실제로 도는 상태인가 알린다 (막지 않는다)",
+    "  SessionStart          drift 훅이 도는 상태인가 · 가드·게이트 정본이 읽히는가 (막지 않는다)",
+    "                        가드는 정본이 없으면 fail-open 이라 **조용히 꺼진다** —",
+    "                        그 조용함을 없애는 것이 check-guard-canon.sh 의 유일한 일이다",
     "  PreToolUse / Bash     되돌릴 수 없는 명령 차단 + Bash 경유 소스 쓰기를 게이트에 넘김",
     "  PreToolUse / 쓰기도구  소스 파일을 쓰기 전에 task 문서·요구 태그 확인",
     "",
@@ -16,6 +18,10 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/check-drift-hook.sh\""
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/check-guard-canon.sh\""
           }
         ]
       }

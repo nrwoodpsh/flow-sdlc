@@ -60,9 +60,9 @@ argument-hint: '[list | {원형키} | {git-url} | (비움=대화형)]'
 - **`.gitignore`·`.claude/settings.json` 은 덮지도 건너뛰지도 않는다 — 합친다.** 빠진 줄·키만 더한다.
   - `.gitignore` 에 `spike/*` 와 `.claude/` 예외(`!.claude/`·`.claude/*`·`!.claude/settings.json`·`!.claude/rules/`)를 확인한다. **전역 gitignore 가 `.claude/` 를 무시하는 기계가 많아** 예외가 없으면 설정과 규칙이 **에러 없이 조용히 미추적**된다. `git check-ignore -v .claude/settings.json` 으로 확인한다.
   - `.claude/settings.json` 은 `enabledPlugins` 에 flow 만 더한다. 다른 키는 손대지 않는다.
-- 템플릿 버전은 **`workflow.config.json` 에 적는다.** 별도 `VERSION` 파일을 만들지 않는다 — 자체 형식을 하나 더 두면 읽는 곳도 하나 더 늘어난다.
+- 템플릿 버전은 **`workflow.config.json` 의 `templates` 절에 적는다**(`flowVersion`·`copiedAt`·`localEdits`). 별도 `VERSION` 파일을 만들지 않는다 — 자체 형식을 하나 더 두면 읽는 곳도 하나 더 늘어난다.
 - 빈 폴더에는 원본의 `.gitkeep` 이 함께 온다. 내용이 생기면 지워도 된다.
-- **업데이트 모드**: 빈 항목만 제안하고 덮지 않는다. 원형은 복제하지 않는다. 템플릿 버전이 플러그인 버전과 다르면 동기화를 제안한다.
+- **업데이트 모드**: 빈 항목만 제안하고 덮지 않는다. 원형은 복제하지 않는다. `templates.flowVersion` 이 플러그인 버전과 다르면 동기화를 제안한다 — 절차는 `${CLAUDE_PLUGIN_ROOT}/presets/template-sync.md` 다(새 프로젝트에서는 읽지 않는다).
 
 ### repo 구성 확인 *(배포 단위가 여럿일 때만)*
 
@@ -80,6 +80,7 @@ argument-hint: '[list | {원형키} | {git-url} | (비움=대화형)]'
 ### 스택 스캔 · 원형
 
 - 지표를 읽는다 — `package.json`·`build.gradle`·`pyproject.toml`·`go.mod` …. 지표가 없으면 스택을 묻는다.
+- 원형 카탈로그 정본은 `${CLAUDE_PLUGIN_ROOT}/presets/architectures/README.md` 다. **표를 그대로 보여주고 키로 고른다** — 목록을 여기 복제하지 않는다.
 - 원형 복제는 **빈 프로젝트만**. 기존 코드가 있으면 목록만 참고로 보여준다.
 - 복제는 `--depth 1` → `.git` 제거 → 이름 치환.
 
@@ -162,7 +163,7 @@ step Q&A 를 하지 않는다. 빈 프로젝트에서는 도메인·커밋 규�
 ## 가드레일
 
 - **추론은 자동, 결정·정책은 질문.** 가드레일·도구 정책·도메인 경계·커밋 규약은 코드에 없다 — 추측 금지.
-- **템플릿을 지어내지 않는다.** `project-template/` 에서 복사한다. `03.templates/` 를 빠뜨리면 이후 산출물에 기준이 없어진다.
+- **템플릿을 지어내지 않는다.** `${CLAUDE_PLUGIN_ROOT}/project-template/` 에서 복사한다. `03.templates/` 를 빠뜨리면 이후 산출물에 기준이 없어진다.
 - 기존 코드를 수정하지 않는다. 원형 복제는 빈 프로젝트만.
 - **설치했다고 거짓 보고하지 않는다.** `[사용자 설치]`·`[인증필요]` 는 남은 일로 명시한다.
 - **옵트인을 기계라고 적지 않는다.** 안 켠 층은 없는 층이다.

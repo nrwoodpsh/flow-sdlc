@@ -124,16 +124,41 @@ if not isinstance(g, dict):
 if not g.get('enabled', True):
     out('allow', '', 'gate.enabled 가 false 다')
 
-# 경로를 repo 상대로 —
-rel = target
-if os.path.isabs(rel):
-    try:
-        rel = os.path.relpath(rel, root)
-    except ValueError:
-        out('allow', '', '프로젝트 밖 경로다')
-rel = rel.replace(os.sep, '/').lstrip('./')
-if rel.startswith('..'):
-    out('allow', '', '프로젝트 밖 경로다')
+# ── 경로 정규화 — **면제 판정 전에** 한다 ──────────────────────
+# 여기가 게이트의 급소였다. 면제는 접두어·글로브로 판정하는데 경로 안의 `..` 를 풀지 않으면
+#   `doc/../src/secret.ts`   → 접두어가 `doc/` 라 "소스 아님" 으로 통과
+#   `spike/../src/secret.ts` → `spike/` 면제로 통과
+# 인데 셸과 Write 도구는 `..` 를 풀어 **실제로 src/secret.ts 에 쓴다.**
+# 게이트의 존재 이유가 문자 셋(`../`)으로 무력화됐다. 그래서 정규화가 첫 단계다.
+#
+# `lstrip('./')` 은 쓰지 않는다 — 그건 접두어가 아니라 **문자 집합**을 벗겨서
+# `.claude/x` → `claude/x` 가 된다. 그러면 `.claude/` 비-소스 접두어에 안 맞아
+# 설정 파일 쓰기가 소스로 오분류돼 **차단된다**(실측: `.claude/settings.json` 이 막혔다).
+# 우회를 못 막은 것과 정상 작업을 막은 것이 같은 한 줄에서 나왔다.
+raw = target.replace(os.sep, '/')
+if os.path.isabs(raw):
+    # 절대 경로는 normpath 가 `..` 를 이미 풀어 준다. 리포 안이면 상대로 바꿔 판정하고,
+    # 밖이면 이 층의 일이 아니다 — `/tmp/x` 쓰기를 막으면 정상 작업이 걸린다.
+    ab = os.path.normpath(raw)
+    rt = os.path.normpath(root).replace(os.sep, '/')
+    if ab == rt or ab.startswith(rt.rstrip('/') + '/'):
+        rel = os.path.relpath(ab, rt).replace(os.sep, '/')
+    else:
+        out('allow', '', '프로젝트 밖 절대 경로다 — 이 게이트의 범위가 아니다', note='outside-abs')
+else:
+    rel = os.path.normpath(raw).replace(os.sep, '/')
+
+# 정규화 뒤에도 `..` 가 남으면 **상대 경로로 리포를 탈출**한 것이다. 통과가 아니라 거부다 —
+# 도구 호출의 상대 경로는 프로젝트 기준으로 해석되므로, 탈출은 정상 작업의 형태가 아니다.
+if rel == '..' or rel.startswith('../'):
+    out('deny', '프로젝트 밖을 가리킨다',
+        f'정규화하니 `{rel}` 이다 — 상대 경로로 프로젝트를 벗어난다',
+        '프로젝트 안의 경로를 쓰세요. 밖에 써야 하면 절대 경로로 쓰세요.',
+        note='escapes-root')
+if rel == '.':
+    out('allow', '', '경로가 프로젝트 루트다', note='not-source')
+# `..` 를 푼 결과가 원본과 다르면 그것 자체를 남긴다 — 왜 통과·차단됐는지 읽을 수 있어야 한다
+norm_note = '' if rel == raw.lstrip('/') else f'정규화: {target} → {rel}'
 
 cfg = {}
 try:

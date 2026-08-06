@@ -188,19 +188,6 @@ def norm(s):
     return s.strip()
 
 
-def fm_field(text, key):
-    """frontmatter 의 한 줄 필드. **yaml 을 쓰지 않는다** — 없으면 꺼지는 검사를 만들지 않는다."""
-    if not text.startswith('---'):
-        return None
-    parts = text.split('---', 2)
-    if len(parts) < 3:
-        return None
-    m = re.search(rf'^{re.escape(key)}:\s*(.*)$', parts[1], re.M)
-    if not m:
-        return None
-    return m.group(1).strip().strip('\'"') or None
-
-
 # ── 1. 표 열 수 ──
 # 이스케이프 안 된 `|` 가 행을 깨뜨린다.
 @check('table-columns', '표 열 수',
@@ -314,29 +301,126 @@ def _argument_hint(ctx):
     return r
 
 
+# ── topology 를 읽는 창구 ──
+# 위상 정본이 없거나 깨진 것을 **이름으로 지목하는 것은 `topology-pending` 의 일이다.**
+# 같은 실패를 다섯 검사가 다섯 번 적으면 무엇을 고쳐야 하는지 흐려진다.
+
+TOPOLOGY = 'plugins/flow/flow.topology.json'
+
+
+def _topo(ctx):
+    p = os.path.join(ctx.root, TOPOLOGY)
+    if not os.path.exists(p):
+        return None
+    try:
+        t = json.loads(ctx.read(p))
+    except json.JSONDecodeError:
+        return None
+    return t if isinstance(t, dict) else None
+
+
+def _section(ctx, path, title):
+    """`## <title>` 절의 본문. 없으면 None."""
+    m = re.search(rf'^## {re.escape(title)}\s*$\n(.*?)(?=^## |\Z)',
+                  ctx.read(path), re.S | re.M)
+    return m.group(1) if m else None
+
+
+def _table_rows(text):
+    """(첫 칸, 줄 원문) — 구분선은 뺀다."""
+    out = []
+    for l in text.split('\n'):
+        if not l.startswith('|') or SEP.match(l):
+            continue
+        first = l.strip('|').split('|')[0]
+        out.append((re.sub(r'[`*]', '', first).strip(), l))
+    return out
+
+
+# 백틱으로 감싼 우리 이름 — `traceability` · `traceability/level`
+NAME = re.compile(r'`([a-z][a-z0-9-]*(?:/[a-z0-9-]+)?)`')
+
+
+def _desc(ctx, path):
+    """frontmatter 의 description. folded(`>-`) 도 이어 붙여 한 줄로.
+
+    한 물리 줄만 읽으면 folded 에서는 `>-` 만 잡혀 **검사가 조용히 꺼진다**(v1 이 그 사고를 겪었다).
+    """
+    L = ctx.lines(path)
+    if not L or L[0].strip() != '---':
+        return None
+    for i, l in enumerate(L[1:], 1):
+        if l.strip() == '---':
+            return None
+        m = re.match(r'^description:\s*(.*)$', l)
+        if not m:
+            continue
+        head = m.group(1).strip()
+        if head not in ('>', '>-', '|', '|-'):
+            return head
+        out = []
+        for nxt in L[i + 1:]:
+            if nxt.strip() == '---' or not nxt.startswith('  '):
+                break
+            out.append(nxt.strip())
+        return ' '.join(out)
+    return None
+
+
 # ── 출력 형식 ↔ 템플릿 왕복 (v1 검사 10 · 10-1) ──
 # 스킬의 `출력 형식` 절이 지시한 절 이름과 그 템플릿의 절이 어긋나면,
 # 그대로 만든 문서가 `doc-verify` 채점에서 FAIL 이다. 그 인과가 실제로 있었다(diag-C 1절).
 #
 # v1 은 스킬↔템플릿 짝을 **스크립트 안에 손으로 열거**했다(`OUT_TPL`·`MULTI`·`ROUNDTRIP`).
-# 그게 diag-C 4절이 말하는 그 병이다 — 정본이 둘. v2 는 스킬 frontmatter 가 자기 템플릿을 적고
-# 검사기는 그걸 읽는다. 짝을 늘리는 비용이 스킬 한 줄이 된다.
+# 그게 diag-C 4절이 말하는 그 병이다 — 정본이 둘. v2 는 `flow.topology.json` 의
+# `output_templates` 가 정본이고 검사기는 그걸 읽는다. 짝을 늘리는 비용이 데이터 한 줄이다.
 #
-#   ---
-#   name: code-review
-#   output-template: 06.review            # 여럿이면 쉼표로, 순서가 코드블록 순서와 짝이다
-#   ---
+#   "output_templates": {
+#     "skills/code-review/references/layers.md": "06.review",                       ← 문서 한 편
+#     "skills/theme-apply/references/apply.md": {"template": "15.theme",
+#                                                "relation": "덧붙임"},             ← 남의 문서에 절을
+#     "skills/doc-verify/references/scoring.md": {"relation": "콘솔"}                ← 문서가 아니다
+#   }
+#
+# **관계를 나눈 이유** — 문서 한 편을 내는 것만 '템플릿의 필수 절이 다 있나'를 물을 수 있다.
+# 덧붙이는 조각에 그걸 물으면 남의 문서의 필수 절까지 요구하게 된다. 그러나 이름 대조는 둘 다 받는다.
+# `콘솔` 은 대조할 템플릿이 없다는 **선언**이다 — 짝을 안 적어서 조용히 꺼지는 것과 다르다.
+#
+# **`SKILL.md` 만 스캔하면 안 된다.** v2 는 출력 형식을 `references/` 조각으로 내렸다 —
+# SKILL.md 만 보면 템플릿이 생겨도 이 검사는 영구히 대상 0건이다.
+OUT_SCAN = ('plugins/flow/skills/*/SKILL.md',
+            'plugins/flow/skills/*/references/*.md',
+            'plugins/flow/procedures/*/*.md')
+RELATIONS = ('문서', '덧붙임', '콘솔')
 
-def _declared(ctx):
-    """(스킬 경로, 스킬 이름, [템플릿 이름...]) — `output-template` 을 적은 스킬만."""
-    out = []
-    for p in ctx.skills():
-        v = fm_field(ctx.read(p), 'output-template')
-        if not v:
+
+def _out_candidates(ctx):
+    """`## 출력 형식` 절을 가진 파일 — 스킬 본체·조각·절차 조각 전부."""
+    return [p for p in ctx.paths(*OUT_SCAN) if '\n## 출력 형식' in ctx.read(p)]
+
+
+def _out_decl(ctx):
+    """{plugins/flow 기준 경로: (관계, [템플릿...])} — `$` 로 시작하는 키는 주석이다."""
+    out = {}
+    for rel, v in ((_topo(ctx) or {}).get('output_templates') or {}).items():
+        if rel.startswith('$'):
             continue
-        tpls = [t.strip() for t in v.split(',') if t.strip()]
-        if tpls:
-            out.append((p, os.path.basename(os.path.dirname(p)), tpls))
+        if isinstance(v, dict):
+            rel_kind = v.get('relation') or '문서'
+            tpl = v.get('template') or ''
+        else:
+            rel_kind, tpl = '문서', str(v)
+        out[rel] = (rel_kind, [x.strip() for x in tpl.split(',') if x.strip()])
+    return out
+
+
+def _declared(ctx, relations=('문서',)):
+    """(파일 경로, plugins/flow 기준 경로, [템플릿...]) — 그 관계로 짝지은 것만."""
+    out = []
+    for rel, (kind, tpls) in sorted(_out_decl(ctx).items()):
+        p = os.path.normpath(os.path.join(ctx.root, 'plugins/flow', rel))
+        if kind in relations and tpls and os.path.isfile(p):
+            out.append((p, rel, tpls))
     return out
 
 
@@ -402,7 +486,21 @@ def _tpl_required(ctx, name):
        '스킬이 이름을 지어내면 생성 문서가 채점에서 미등재다 (diag-C 1절 · v1 검사 10)')
 def _output_sections_exist(ctx):
     r = Result(unit='절')
-    for p, name, tpls in _declared(ctx):
+    decl = _out_decl(ctx)
+    for rel, (kind, tpls) in sorted(decl.items()):
+        if not os.path.isfile(os.path.normpath(os.path.join(ctx.root, 'plugins/flow', rel))):
+            r.targets += 1
+            r.fail(f"낡은 짝 선언 — `output_templates` 의 `{rel}` 파일이 없다 "
+                   f"(조각을 옮겼으면 선언도 옮긴다)")
+        if kind not in RELATIONS:
+            r.targets += 1
+            r.fail(f"관계 이름 {rel} — `{kind}` (하나여야 한다: {' · '.join(RELATIONS)})")
+        elif kind != '콘솔' and not tpls:
+            r.targets += 1
+            r.fail(f"템플릿 없음 {rel} — 관계가 `{kind}` 인데 `template` 이 비었다")
+
+    paired = set(decl)
+    for p, rel, tpls in _declared(ctx, ('문서', '덧붙임')):
         known = _tpl_sections(ctx, *tpls)
         for sec in _out_sections(ctx, p):
             r.targets += 1
@@ -410,6 +508,17 @@ def _output_sections_exist(ctx):
                 r.fail(f"출력 형식 미등재 {ctx.rel(p)} — `{sec}` 이 템플릿"
                        f"({'·'.join(tpls)})에 없다 "
                        f"(템플릿이 기준이다 — 이름을 맞추거나 템플릿에 절을 추가한다)")
+
+    # 짝을 안 적으면 이 검사가 조용히 꺼진다. **문서 한 편을 내는 출력 형식**만 문다 —
+    # 콘솔 출력이나 남의 문서에 덧붙이는 조각은 대조할 템플릿이 없는 게 정상이다.
+    for p in _out_candidates(ctx):
+        rel = os.path.relpath(p, os.path.join(ctx.root, 'plugins/flow')).replace(os.sep, '/')
+        if rel in paired or not _out_sections(ctx, p):
+            continue
+        r.targets += 1
+        r.fail(f"짝 미선언 {ctx.rel(p)} — 출력 형식이 `## ` 절로 문서 한 편을 내는데 "
+               f"`flow.topology.json` 의 `output_templates` 에 템플릿이 없다 "
+               f"(대조할 기준이 없으면 이 검사가 꺼진다)")
     return r
 
 
@@ -418,6 +527,7 @@ def _output_sections_exist(ctx):
 def _output_required(ctx):
     r = Result(unit='필수 절')
     for p, name, tpls in _declared(ctx):
+        name = ctx.rel(p)
         blocks = _out_blocks(ctx, p)
         for idx, t in enumerate(tpls):
             req = _tpl_required(ctx, t)
@@ -672,6 +782,238 @@ def _topology_pending(ctx):
                 r.fail(f"pending `{pat}` 이 가리키는 자리가 없다 — 채워졌으면 pending 에서 지운다")
         elif pat not in t:
             r.fail(f"pending `{pat}` 이 가리키는 최상위 키가 없다")
+    return r
+
+
+# ── 커맨드 `## 연결` ↔ topology `loads` ──
+# v1 최다 실측 결함이 여기였다 — `## 연결` 절이 본문과 15+23건 어긋났는데 **검사기는 세 줄의
+# 존재만 봤다**(diag-A 2절). 존재 검사는 어긋남을 못 본다. 그래서 정본과 낱낱이 대조한다.
+#
+# `modes` 가 있으면 모드마다 한 행이다 — 모드를 합쳐 적으면 "어느 모드에서 무엇을 싣나"가 사라진다.
+# `conditional` 은 **적히기만 하면 안 되고 조건이 같은 줄에 있어야 한다** — 조건이 없으면
+# 늘 읽는 것과 구별되지 않아서, 순수 신규 구현에서도 다 읽게 된다.
+
+def _names(xs, cap=6):
+    """이름 목록을 한 줄로 — 길면 앞부분만 적고 몇 개 더인지 밝힌다(조용히 자르지 않는다)."""
+    head = ' · '.join(f'`{x}`' for x in xs[:cap])
+    return head if len(xs) <= cap else f"{head} 외 {len(xs) - cap}건"
+
+
+def _loads_rows(loads):
+    """loads 를 행 단위로 정규화 — [(행 이름 또는 None, 늘 싣는 것, {조건부: 조건})]."""
+    if not isinstance(loads, dict):
+        return []
+
+    def one(d):
+        always = set(d.get('skills') or []) | set(d.get('fragments') or [])
+        cond = dict(d.get('conditional') or {})
+        cond.update(d.get('conditional_skills') or {})
+        return always, cond
+
+    if loads.get('modes'):
+        return [(m, *one(v or {})) for m, v in loads['modes'].items()]
+    return [(None, *one(loads))]
+
+
+@check('command-loads-parity', '커맨드 연결 절 ↔ topology loads',
+       'v1 최다 실측 결함 — 연결 절이 본문과 15+23건 어긋났고 검사기는 존재만 봤다 (diag-A 2절)')
+def _command_loads_parity(ctx):
+    r = Result(unit='배선')
+    t = _topo(ctx)
+    if not t:
+        return r
+    skills = t.get('skills') or {}
+    ours = set(skills) | {f"{s}/{f}" for s, v in skills.items()
+                          for f in ((v or {}).get('fragments') or [])}
+
+    for name, c in (t.get('commands') or {}).items():
+        p = os.path.join(ctx.root, f'plugins/flow/commands/{name}.md')
+        rows = _loads_rows((c or {}).get('loads'))
+        if not os.path.isfile(p) or not rows:
+            continue
+        sec = _section(ctx, p, '연결')
+        if sec is None:
+            r.targets += 1
+            r.fail(f"연결 절 없음 {ctx.rel(p)} — `## 연결` 이 없어 topology 의 "
+                   f"`loads` 를 대조할 자리가 없다")
+            continue
+        table = _table_rows(sec)
+
+        for mode, always, cond in rows:
+            if mode is None:
+                scope, tag = sec, ''
+            else:
+                hit = [l for lab, l in table if lab == mode]
+                if not hit:
+                    r.targets += 1
+                    r.fail(f"모드 행 없음 {ctx.rel(p)} — `{mode}` 행이 `## 연결` 에 없다 "
+                           f"(topology 가 `loads.modes` 로 갈랐으면 본문도 모드별로 적는다)")
+                    continue
+                scope, tag = '\n'.join(hit), f"[{mode}] "
+            named = set(NAME.findall(scope))
+            # 한 뿌리에서 나온 어긋남은 한 줄로 모은다 — 같은 표 한 칸이 열 줄을 내면 읽지 않는다
+            miss, cmiss, unmarked, extra = [], [], [], []
+
+            for x in sorted(always):
+                r.targets += 1
+                if x not in named:
+                    miss.append(x)
+            for x, why in sorted(cond.items()):
+                r.targets += 1
+                line = next((l for l in scope.split('\n') if f'`{x}`' in l), None)
+                if line is None:
+                    cmiss.append(x)
+                elif why not in line:
+                    unmarked.append(f"{x}({why})")
+            for x in sorted(named & ours):
+                if x not in always and x not in cond:
+                    r.targets += 1
+                    extra.append(x)
+
+            if miss:
+                r.fail(f"연결 누락 {ctx.rel(p)} — {tag}topology 가 싣는다고 적은 "
+                       f"{_names(miss)} 가 `## 연결` 에 없다")
+            if cmiss:
+                r.fail(f"연결 누락 {ctx.rel(p)} — {tag}조건부 {_names(cmiss)} 가 "
+                       f"`## 연결` 에 없다 (조건부도 적는다 — 안 적으면 안 읽는 것으로 읽힌다)")
+            if unmarked:
+                r.fail(f"조건 미표기 {ctx.rel(p)} — {tag}{_names(unmarked)} 를 조건 없이 "
+                       f"적었다 (늘 읽는 것과 구별되지 않아 순수 신규에서도 다 읽게 된다. "
+                       f"이름 옆 같은 줄에 조건을 적는다)")
+            if extra:
+                r.fail(f"연결 초과 {ctx.rel(p)} — {tag}{_names(extra)} 는 topology 의 "
+                       f"`loads` 에 없다 (본문이 배선을 발명했다 — 정본에 먼저 적는다)")
+    return r
+
+
+# ── gatekeeper 위임 지시가 있나 ──
+# v1 최대 결함 — 게이트를 4곳이 약속하고 실제로 거는 곳은 하나였다(diag-A 4절).
+# `entry.content` 는 **gatekeeper 가 판정하는 등급**이다. 그런데 부르는 것 자체는 약속이라
+# 기계가 못 막는다. 막을 수 있는 것은 **부르라는 지시가 본문에 있나** 까지다.
+#
+# `entry.content` 가 빈 커맨드에는 걸지 않는다 — 부를 것이 없는 게 정상이고,
+# 없는 것을 요구하면 커맨드가 게이트를 발명하게 된다.
+GK_CALL = re.compile(r'gatekeeper`?\s*(?:에이전트)?\s*(?:에|에게|를|을)?\s*'
+                     r'[^\n]{0,30}?(?:부른다|넘긴다|위임)')
+
+
+@check('gatekeeper-delegation', 'gatekeeper 위임 지시',
+       '게이트를 약속만 하고 아무도 안 부르는 것 — v1 최대 결함 (diag-A 4절)')
+def _gatekeeper_delegation(ctx):
+    r = Result(unit='커맨드')
+    t = _topo(ctx)
+    if not t:
+        return r
+    for name, c in (t.get('commands') or {}).items():
+        content = ((c or {}).get('entry') or {}).get('content') or []
+        if not content:
+            continue                       # 부를 것이 없다 — 대상이 아니다
+        p = os.path.join(ctx.root, f'plugins/flow/commands/{name}.md')
+        if not os.path.isfile(p):
+            continue
+        r.targets += 1
+        if not GK_CALL.search(ctx.read(p)):
+            ids = ', '.join(str(x.get('id')) for x in content if isinstance(x, dict))
+            r.fail(f"위임 지시 없음 {ctx.rel(p)} — `entry.content`({ids}) 가 있는데 "
+                   f"`gatekeeper` 를 부르라는 지시가 본문에 없다 "
+                   f"(약속만 남으면 게이트가 이름만 있는 것이다)")
+    return r
+
+
+# ── 스킬 description 의 등급 ↔ 문형 ──
+# v1 은 자율 7개 중 6개가 오발동 억제 신호(`/flow:X 가 쓴다`)를 달아 **등급이 사실상 뒤집혔다**
+# (diag-B 3-a). v2 는 등급을 데이터로 두고 문형을 대조한다.
+#
+# 등급을 `SKILL.md` frontmatter 의 비표준 필드로 둘 수 있는지는 이 세션에서 확인이 안 됐다
+# (설계 `description 등급` 절의 "구현 전 확인할 것"). 그래서 지시된 대체 자리인
+# `flow.topology.json` 의 `skills.<이름>.grade` 를 정본으로 읽는다.
+GRADES = {
+    '호출-전용': '커맨드가 싣는다 — 싣는 커맨드를 열거한다',
+    '자율': '사용자·작업 성질로 발동한다 — 커맨드 열거로 끝내지 않는다',
+    '기본값': '조건에 맞는 커맨드가 전부 싣는다 — 열거하지 않는다(부분 열거는 거짓말이 된다)',
+}
+SELF_CALL = re.compile(r'사용자가\s*직접|직접\s*(?:요청|부른)')
+
+
+@check('skill-description-grade', '스킬 등급 ↔ description 문형',
+       'v1 은 자율 7개 중 6개가 억제 신호를 달아 등급이 뒤집혔다 (diag-B 3-a)')
+def _skill_description_grade(ctx):
+    r = Result(unit='스킬')
+    t = _topo(ctx)
+    if not t:
+        return r
+    for name, v in sorted((t.get('skills') or {}).items()):
+        p = os.path.join(ctx.root, f'plugins/flow/skills/{name}/SKILL.md')
+        if not os.path.isfile(p):
+            continue
+        r.targets += 1
+        grade = (v or {}).get('grade')
+        if grade not in GRADES:
+            r.fail(f"등급 없음 skills.{name}.grade — {grade!r} "
+                   f"(하나여야 한다: {' · '.join(GRADES)})")
+            continue
+        d = _desc(ctx, p)
+        if not d:
+            r.fail(f"description 없음 {ctx.rel(p)} — 매 턴 실리는 자리가 비었다")
+            continue
+        listed = set(re.findall(r'/flow:([a-z]+)', d))
+        if grade == '호출-전용' and not listed:
+            r.fail(f"문형 어긋남 {ctx.rel(p)} [호출-전용] — description 이 싣는 커맨드를 "
+                   f"열거하지 않았다 (일반형은 기계가 대조할 수 없다 — "
+                   f"v1 의 '모든 커맨드가 쓴다'가 그렇게 통과했다)")
+        if grade == '기본값' and listed:
+            r.fail(f"문형 어긋남 {ctx.rel(p)} [기본값] — `/flow:"
+                   f"{sorted(listed)[0]}` 를 열거했다. 기본값은 열거하지 않는다 "
+                   f"(부분 열거는 '이것만 쓴다'로 읽혀 거짓말이 된다)")
+        if grade == '자율' and not SELF_CALL.search(d):
+            r.fail(f"문형 어긋남 {ctx.rel(p)} [자율] — 커맨드만 적고 직접 호출을 안 적었다 "
+                   f"(그것이 v1 에서 등급이 뒤집힌 자리다)")
+    return r
+
+
+# ── description 의 '누가 쓴다'가 사실인가 — 양방향 ──
+# v1 검사기는 **한 방향만** 봐서 "모든 커맨드가 쓴다"는 거짓이 통과했다. 매 턴 실리는 거짓말이다.
+# 조각만 싣는 것도 '쓴다'로 센다 — `doc-verify` 는 `/flow:design` 이 `canon-map` 조각만 읽는다.
+
+def _uses(t):
+    """커맨드 → 그 커맨드가 쓰는 스킬 이름 집합 (조각만 싣는 것도 쓴다)."""
+    out = {}
+    for name, c in (t.get('commands') or {}).items():
+        sk = set()
+        for _, always, cond in _loads_rows((c or {}).get('loads')):
+            for x in set(always) | set(cond):
+                sk.add(x.split('/')[0])
+        out[name] = sk
+    return out
+
+
+@check('skill-description-users', "description 의 '누가 쓴다' 양방향",
+       'v1 은 한 방향만 봐서 거짓 주장이 매 턴 실렸다 (diag-B 3-g · 설계 커맨드↔스킬 연결도)')
+def _skill_description_users(ctx):
+    r = Result(unit='스킬')
+    t = _topo(ctx)
+    if not t:
+        return r
+    uses = _uses(t)
+    for name in sorted(t.get('skills') or {}):
+        p = os.path.join(ctx.root, f'plugins/flow/skills/{name}/SKILL.md')
+        if not os.path.isfile(p):
+            continue
+        d = _desc(ctx, p)
+        if not d:
+            continue                       # 위 검사가 지목한다
+        r.targets += 1
+        listed = set(re.findall(r'/flow:([a-z]+)', d))
+        actual = {c for c, s in uses.items() if name in s}
+        for c in sorted(listed - actual):
+            r.fail(f"거짓 주장 {ctx.rel(p)} — `/flow:{c}` 가 쓴다고 적었는데 topology 의 "
+                   f"`commands.{c}.loads` 에 `{name}` 도 그 조각도 없다 "
+                   f"(매 턴 실리는 거짓말이다)")
+        if listed:
+            for c in sorted(actual - listed):
+                r.fail(f"열거 누락 {ctx.rel(p)} — `/flow:{c}` 가 싣는데 description 에 없다 "
+                       f"(부분 열거는 '이것만 쓴다'로 읽힌다 — 전부 적거나 등급을 "
+                       f"`기본값` 으로 내린다)")
     return r
 
 
