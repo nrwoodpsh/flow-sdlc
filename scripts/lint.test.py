@@ -210,6 +210,47 @@ def _graded(grade, desc, loads_skills=('traceability',)):
     }
 
 
+def _wired(enforced):
+    """`machine` 등급 하나 + 그걸 강제한다는 훅. `enforced=False` 면 배선 증명이 없다."""
+    item = {'id': 'unit-task-doc', 'what': '소스를 담은 task 문서가 있다'}
+    if enforced:
+        item['enforcedBy'] = {'kind': 'pretooluse',
+                              'hook': 'hooks/scripts/gate-source-write.sh',
+                              'event': 'PreToolUse', 'matcher': 'Write|Edit'}
+    return {
+        TOPO_REL: json.dumps(
+            {'version': 1, 'commands': {'build': {
+                'order': 1, 'phase': '구현', 'after': [], 'next': [],
+                'entry': {'machine': [item], 'content': [], 'promise': []},
+                'loads': None, 'procedures': None}}},
+            ensure_ascii=False, indent=2),
+        'plugins/flow/hooks/hooks.json': json.dumps(
+            {'hooks': {'PreToolUse': [
+                {'matcher': 'Write|Edit', 'hooks': [
+                    {'type': 'command',
+                     'command': '"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/gate-source-write.sh"'}]}]}},
+            ensure_ascii=False, indent=2),
+        'plugins/flow/hooks/scripts/gate-source-write.sh': "#!/usr/bin/env bash\nexit 0\n",
+    }
+
+
+def _grade_doc(label):
+    """topology 는 `promise` 하나뿐인데 커맨드 본문이 `label` 등급이라 적는다."""
+    return {
+        TOPO_REL: json.dumps(
+            {'version': 1, 'commands': {'sync': {
+                'order': 1, 'phase': '수렴', 'after': [], 'next': [],
+                'entry': {'machine': [], 'content': [],
+                          'promise': [{'id': 'source-changed', 'what': '소스 변경이 있다'}]},
+                'loads': None, 'procedures': None}}},
+            ensure_ascii=False, indent=2),
+        'plugins/flow/commands/sync.md': (
+            "---\nname: sync\n---\n\n# sync\n\n## 게이트\n\n"
+            f"- **{label}** — `source-changed`. git diff 가 비었으면 할 것이 없다.\n\n"
+            "## 경계\n\n끝.\n"),
+    }
+
+
 CASES = {
     # ── 표 렌더 4종 ──
     'table-columns': (
@@ -278,6 +319,20 @@ CASES = {
                                'who': 'gatekeeper'}]),
          **_cmd_md([('스킬', '없다')],
                    tail="- **내용** — 계약을 따랐는지 이 커맨드가 확인한다.\n\n")},
+    ),
+
+    # ── `machine` 등급 ↔ 실제 훅 배선 ──
+    'machine-gate-wired': (
+        _wired(enforced=True),
+        # `machine` 이라 적었는데 무엇이 강제하는지가 없다 = 아무도 안 보는 기계 (H1)
+        _wired(enforced=False),
+    ),
+
+    # ── 커맨드 등급 표시 ↔ topology ──
+    'entry-grade-parity': (
+        _grade_doc('약속'),
+        # topology 는 machine 이 비었는데 본문은 "기계"라 적는다 = 거짓 표시 (H1)
+        _grade_doc('기계'),
     ),
 
     # ── 스킬 등급 ↔ description 문형 ──

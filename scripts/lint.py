@@ -341,6 +341,19 @@ def _table_rows(text):
 NAME = re.compile(r'`([a-z][a-z0-9-]*(?:/[a-z0-9-]+)?)`')
 
 
+def _agents(ctx):
+    """에이전트 이름 — 배선 표에 `builder`·`gatekeeper` 처럼 함께 적힌다. 스킬이 아니지만 실재한다."""
+    return {os.path.basename(p)[:-3] for p in ctx.paths('plugins/flow/agents/*.md')}
+
+
+def _named_in_rows(text):
+    """**표 행 안**의 이름만. 절의 산문은 배선이 아니라 설명이라 뺀다."""
+    got = set()
+    for _, line in _table_rows(text):
+        got |= set(NAME.findall(line))
+    return got
+
+
 def _desc(ctx, path):
     """frontmatter 의 description. folded(`>-`) 도 이어 붙여 한 줄로.
 
@@ -852,7 +865,7 @@ def _command_loads_parity(ctx):
                 scope, tag = '\n'.join(hit), f"[{mode}] "
             named = set(NAME.findall(scope))
             # 한 뿌리에서 나온 어긋남은 한 줄로 모은다 — 같은 표 한 칸이 열 줄을 내면 읽지 않는다
-            miss, cmiss, unmarked, extra = [], [], [], []
+            miss, cmiss, unmarked, extra, unknown = [], [], [], [], []
 
             for x in sorted(always):
                 r.targets += 1
@@ -870,6 +883,18 @@ def _command_loads_parity(ctx):
                     r.targets += 1
                     extra.append(x)
 
+            # **실재하지 않는 이름도 잡는다.** 예전에는 `named & ours` 라 실재 스킬일 때만
+            # 걸렸고 `zzz-fake` 같은 오타·환각은 조용히 통과했다(최종 검증 M3).
+            # 배선 표는 **읽을 것의 목록**이라, 없는 이름은 그 자리에서 아무것도 안 읽힌다.
+            #
+            # 표 행만 본다 — 절의 산문은 배선이 아니라 설명이고, 거기까지 잡으면
+            # `default-reference` 의 `delegation` 조각 같은 정상 서술이 오탐이 된다.
+            known = ours | _agents(ctx)
+            for x in sorted(_named_in_rows(scope) - known):
+                r.targets += 1
+                if x not in always and x not in cond:
+                    unknown.append(x)
+
             if miss:
                 r.fail(f"연결 누락 {ctx.rel(p)} — {tag}topology 가 싣는다고 적은 "
                        f"{_names(miss)} 가 `## 연결` 에 없다")
@@ -883,6 +908,10 @@ def _command_loads_parity(ctx):
             if extra:
                 r.fail(f"연결 초과 {ctx.rel(p)} — {tag}{_names(extra)} 는 topology 의 "
                        f"`loads` 에 없다 (본문이 배선을 발명했다 — 정본에 먼저 적는다)")
+            if unknown:
+                r.fail(f"없는 이름 {ctx.rel(p)} — {tag}{_names(unknown)} 는 스킬·조각·"
+                       f"에이전트 어디에도 없다 (오타나 환각이다. 그 자리에서는 "
+                       f"아무것도 안 읽힌다 — 매 턴 실리는 거짓말이 된다)")
     return r
 
 
@@ -1014,6 +1043,165 @@ def _skill_description_users(ctx):
                 r.fail(f"열거 누락 {ctx.rel(p)} — `/flow:{c}` 가 싣는데 description 에 없다 "
                        f"(부분 열거는 '이것만 쓴다'로 읽힌다 — 전부 적거나 등급을 "
                        f"`기본값` 으로 내린다)")
+    return r
+
+
+# ── `machine` 등급이 실제로 배선됐나 ──
+# **v1 의 병이 여기서 재발했다.** 설계는 강제력을 3등급으로 갈랐는데, topology 에
+# `machine` 이라 적힌 진입 조건 7개 중 실제로 훅이 보는 것은 3개뿐이었고
+# 커맨드의 `## 진입 조건` 표는 5곳에 *"훅 — 경로 존재"* 라고 렌더하고 있었다.
+# 아무도 안 보는데 사용자에게는 기계라고 표시된 것이다 —
+# v1 README 가 "드리프트 4겹"이라 적고 AI 경로는 1겹이던 것과 같은 종류다.
+#
+# 그래서 `machine` 을 다는 비용을 **배선 증명**으로 만든다. `enforcedBy` 로 무엇이
+# 강제하는지 적고, 그 훅이 실재하고 `hooks.json` 에 걸렸는지 여기서 대조한다.
+@check('machine-gate-wired', '`machine` 등급 ↔ 실제 훅 배선',
+       '강제하는 기계가 없는데 기계라고 적는 것 (최종 검증 H1 · diag-C 3절과 같은 병)')
+def _machine_gate_wired(ctx):
+    r = Result(unit='machine 조건')
+    tp = os.path.join(ctx.root, 'plugins/flow/flow.topology.json')
+    hp = os.path.join(ctx.root, 'plugins/flow/hooks/hooks.json')
+    if not os.path.exists(tp):
+        return r
+    try:
+        topo = json.loads(ctx.read(tp))
+    except json.JSONDecodeError as e:
+        r.targets = 1
+        r.fail(f"flow.topology.json 파싱 실패 — {e}")
+        return r
+
+    wired = {}          # 훅 경로 → 걸린 이벤트들
+    if os.path.exists(hp):
+        try:
+            for ev, groups in (json.loads(ctx.read(hp)).get('hooks') or {}).items():
+                for gr in groups or []:
+                    for h in gr.get('hooks') or []:
+                        cmd = (h.get('command') or '').strip('"')
+                        tail = cmd.replace('${CLAUDE_PLUGIN_ROOT}/', '').strip('"')
+                        wired.setdefault(tail, set()).add(ev)
+        except json.JSONDecodeError as e:
+            r.targets = 1
+            r.fail(f"hooks.json 파싱 실패 — {e}")
+            return r
+
+    for name, c in (topo.get('commands') or {}).items():
+        for item in ((c or {}).get('entry') or {}).get('machine') or []:
+            r.targets += 1
+            iid = item.get('id')
+            eb = item.get('enforcedBy')
+            if not isinstance(eb, dict):
+                r.fail(f"배선 증명 없음 — commands.{name}.entry.machine `{iid}` 에 "
+                       f"`enforcedBy` 가 없다 (무엇이 강제하는지 못 적으면 그건 기계가 "
+                       f"아니라 약속이다. `promise` 로 내리고 `why` 를 적는다)")
+                continue
+            hook = eb.get('hook')
+            if not hook:
+                r.fail(f"배선 증명 불완전 — commands.{name}.entry.machine `{iid}` 의 "
+                       f"`enforcedBy.hook` 이 비었다")
+                continue
+            if not os.path.exists(os.path.join(ctx.root, 'plugins/flow', hook)):
+                r.fail(f"없는 훅을 가리킨다 — commands.{name}.entry.machine `{iid}` → "
+                       f"`{hook}` 파일이 없다")
+                continue
+            kind = eb.get('kind')
+            if kind == 'git-hook':
+                # 우리가 심지만 **프로젝트가 설치해야** 도는 층이다. 조건을 안 적으면
+                # 미설치 프로젝트에서 없는 층을 기계로 읽는다 (최종 검증 M4).
+                if not eb.get('condition'):
+                    r.fail(f"조건 없음 — commands.{name}.entry.machine `{iid}` 는 git 훅이라 "
+                           f"프로젝트가 설치해야만 돈다. `enforcedBy.condition` 에 그 조건을 "
+                           f"적어야 표에 함께 렌더된다")
+            else:
+                ev = eb.get('event') or 'PreToolUse'
+                if ev not in wired.get(hook, set()):
+                    r.fail(f"배선 안 됨 — commands.{name}.entry.machine `{iid}` 가 "
+                           f"`{hook}` 을 가리키는데 hooks.json 의 `{ev}` 에 없다 "
+                           f"(적어만 두고 안 걸면 아무도 판정하지 않는다)")
+    return r
+
+
+# ── 커맨드가 표시하는 등급 ↔ topology 등급 ──
+# 진입 조건 절은 손으로 쓴다(생성물이 아니다). 그래서 topology 에서 등급을 내려도 본문은
+# 그대로 남는다 — H1 이 정확히 그 상태였다(5곳이 "기계"라 적혔는데 훅은 안 봄).
+#
+# **표와 불릿 두 형식을 다 본다.** 한 형식만 보면 다른 형식이 탈출구가 된다 —
+# 실제로 표만 보게 짰더니 `verify`·`sync` 의 불릿 거짓 표시가 그대로 통과했다.
+GRADE_LABEL = {'machine': '기계', 'content': '내용', 'promise': '약속'}
+LABEL_GRADE = {v: k for k, v in GRADE_LABEL.items()}
+GATE_HEAD = re.compile(r'^##+\s+(?:게이트|진입 조건)')
+GRADE_BULLET = re.compile(r'^\s*[-*]\s*\*\*(기계|내용|약속)\*\*')
+# **`없다` 는 구분자 바로 뒤에 올 때만 '없다는 선언'이다.** 문장 아무 데서나 찾으면
+# `…판정 독립성이 없다` 같은 서술이 선언으로 읽힌다(실제로 build 가 그렇게 오판됐다).
+GRADE_NONE = re.compile(r'^\s*[-*]\s*\*\*(?:기계|내용|약속)\*\*\s*[—–-]\s*없다')
+
+
+@check('entry-grade-parity', '커맨드 등급 표시 ↔ topology',
+       '등급을 내려도 커맨드 본문에 기계로 남는 것 (최종 검증 H1)')
+def _entry_grade_parity(ctx):
+    r = Result(unit='커맨드')
+    tp = os.path.join(ctx.root, 'plugins/flow/flow.topology.json')
+    if not os.path.exists(tp):
+        return r
+    try:
+        topo = json.loads(ctx.read(tp))
+    except json.JSONDecodeError:
+        return r
+    cmds = topo.get('commands') or {}
+
+    for p in ctx.commands():
+        name = os.path.basename(p)[:-3]
+        c = cmds.get(name)
+        if not c:
+            continue
+        entry = c.get('entry') or {}
+        actual = {GRADE_LABEL[g] for g in ('machine', 'content', 'promise')
+                  if (entry.get(g) or [])}
+
+        L = ctx.lines(p)
+        fenced = fenced_map(L)
+        start = next((i for i, l in enumerate(L)
+                      if not fenced[i] and GATE_HEAD.match(l)), None)
+        if start is None:
+            # 기계라고 데이터에 적었으면 **보여 줘야** 한다. 절을 지워서 대조를 피하는 길을 막는다.
+            if entry.get('machine'):
+                r.targets += 1
+                r.fail(f"게이트 절 없음 {ctx.rel(p)} — topology 는 `entry.machine` 이 "
+                       f"{len(entry['machine'])}개라고 적는데 본문에 진입 조건 절이 없다 "
+                       f"(기계로 막히는 것은 사용자에게 보여야 한다)")
+            continue
+        end = next((i for i in range(start + 1, len(L))
+                    if not fenced[i] and L[i].startswith('## ')), len(L))
+        r.targets += 1
+
+        claimed, denied = set(), set()
+        for i in range(start, end):
+            if fenced[i]:
+                continue
+            l = L[i]
+            m = GRADE_BULLET.match(l)
+            if m:
+                lab = m.group(1)
+                # `- **내용** — 없다.` 는 **없다는 선언**이다. 있다고 세면 안 된다
+                (denied if GRADE_NONE.match(l) else claimed).add(lab)
+                continue
+            if l.startswith('|') and not SEP.match(l):
+                first = re.sub(r'[`*]', '', l.strip('|').split('|')[0]).strip()
+                if first in LABEL_GRADE:
+                    claimed.add(first)
+
+        for lab in sorted(claimed - actual):
+            g = LABEL_GRADE[lab]
+            r.fail(f"거짓 등급 표시 {ctx.rel(p)} — 본문은 `{lab}` 이라 적는데 topology 의 "
+                   f"`entry.{g}` 가 비었다 (아무도 판정하지 않는 것을 판정한다고 적는 것이 "
+                   f"v1 의 병이다 — 내렸으면 본문도 내린다)")
+        for lab in sorted(actual - claimed - denied):
+            g = LABEL_GRADE[lab]
+            r.fail(f"등급 누락 {ctx.rel(p)} — topology 의 `entry.{g}` 에 "
+                   f"{len(entry[g])}개가 있는데 본문이 `{lab}` 을 안 적는다")
+        for lab in sorted(denied & actual):
+            g = LABEL_GRADE[lab]
+            r.fail(f"없다고 적었는데 있다 {ctx.rel(p)} — 본문은 `{lab}` 이 없다고 적는데 "
+                   f"topology 의 `entry.{g}` 에 {len(entry[g])}개가 있다")
     return r
 
 

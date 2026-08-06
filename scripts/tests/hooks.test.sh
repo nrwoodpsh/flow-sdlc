@@ -773,6 +773,8 @@ wt "src/a.ts"           'ln -sf /tmp/x src/a.ts'
 wt "src/a.ts"           'install -m644 a.ts src/a.ts'
 wt "src/a.ts"           'truncate -s0 src/a.ts'
 wt "src/a.ts"           'dd of=src/a.ts if=/dev/zero'
+wt "src/a.ts"           'rsync a.ts src/a.ts'
+wt "src/a.ts"           'rsync -av /tmp/x src/a.ts'
 wt "src/a.ts"           'echo x >| src/a.ts'
 # `last` 모드 — 원본까지 뽑으면 **읽기만 하는 복사가 막힌다.** 대상만 뽑는다
 wt "/tmp/backup.ts"     'cp src/a.ts /tmp/backup.ts'
@@ -816,6 +818,8 @@ bw 차단 'dd of=src/b.ts if=/dev/zero'   "$P2"
 bw 차단 'truncate -s0 src/b.ts'         "$P2"
 bw 차단 'ln -sf /tmp/x src/b.ts'        "$P2"
 bw 차단 'install -m644 a.ts src/b.ts'   "$P2"
+bw 차단 'rsync a.ts src/b.ts'          "$P2"
+bw 통과 'rsync src/a.ts /tmp/backup.ts' "$P2"
 bw 차단 'echo x >| src/b.ts'            "$P2"
 bw 통과 'cp src/a.ts /tmp/backup.ts'    "$P2"
 bw 통과 'mv src/a.ts /tmp/b'            "$P2"

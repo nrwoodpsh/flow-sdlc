@@ -24,6 +24,8 @@ argument-hint: '[커밋 메시지 힌트 (선택)]'
 진입 조건의 정본은 `flow.topology.json` 의 `commands.commit.entry` 다. **이 커맨드가 스스로 판정하지 않는다.**
 
 - **기계** — `no-drift`. `pre-commit` 훅이 소스만 바뀌고 문서가 안 온 상태를 막는다. **사람이 손으로 커밋할 때도 같은 훅이 돈다.**
+  **단 조건이 있다 — `/flow:setup` 이 `core.hooksPath` 를 건 프로젝트에서만 돈다.**
+  안 건 프로젝트에는 이 층이 아예 없다. `SessionStart` 의 `check-drift-hook.sh` 가 그 상태를 알린다.
 - **내용** — 없다. `entry.content` 가 비어 있으니 **여기서 `gatekeeper` 를 부르지 않는다.** 부를 자리를 만들려면 `flow.topology.json` 에 먼저 적는다 — 커맨드 본문이 게이트를 발명하지 않는다.
 - **약속** — 없다.
 

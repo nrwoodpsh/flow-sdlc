@@ -25,7 +25,7 @@ argument-hint: '[sys | domain {도메인} | func {도메인}/{NN.유닛}] [legac
 
 | 등급 | 조건 | 누가 판정 |
 |:--|:--|:--|
-| 기계 | `workflow.config.json` 이 있다 | 훅 — 파일 존재 |
+| 약속 | `workflow.config.json` 이 있다 | **아무도** — 훅이 커맨드 호출을 못 본다 |
 | 내용 | 요구의 레벨(시스템·도메인·기능)이 맞나 | **`gatekeeper`** — 진행하는 쪽이 아니다 |
 | 약속 | 요구 ID 는 불변·append-only — 번호를 재편하지 않는다 | 아무도. 규약 정본은 `traceability` 다 |
 

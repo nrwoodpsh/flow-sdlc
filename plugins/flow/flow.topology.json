@@ -208,13 +208,7 @@
         "commit"
       ],
       "entry": {
-        "machine": [
-          {
-            "id": "has-config",
-            "what": "workflow.config.json 이 있다",
-            "how": "파일 존재"
-          }
-        ],
+        "machine": [],
         "content": [],
         "promise": [
           {
@@ -222,6 +216,12 @@
             "what": "운영 장애·SOP 는 완화 우선이고 `사람만` 단계를 실행하지 않는다",
             "why": "v1 ask 1-A·1-D 의 안전 규칙이다. 기계로 판정할 수 없어 약속으로 남는다",
             "canon": "ops-doc"
+          },
+          {
+            "id": "has-config",
+            "what": "workflow.config.json 이 있다",
+            "why": "커맨드 호출을 가로채는 훅이 없다. 도구 호출도 안 일어나 검사할 시점 자체가 없다",
+            "wasGrade": "machine"
           }
         ]
       },
@@ -251,13 +251,7 @@
         "design"
       ],
       "entry": {
-        "machine": [
-          {
-            "id": "has-config",
-            "what": "workflow.config.json 이 있다",
-            "how": "파일 존재"
-          }
-        ],
+        "machine": [],
         "content": [
           {
             "id": "level-decision",
@@ -270,6 +264,12 @@
             "id": "append-only",
             "what": "요구 ID 는 불변·append-only — 번호를 재편하지 않는다",
             "canon": "traceability"
+          },
+          {
+            "id": "has-config",
+            "what": "workflow.config.json 이 있다",
+            "why": "같음 — 검사할 도구 호출 시점이 없다. config 가 없으면 게이트·가드가 'flow 프로젝트가 아니다'로 조용히 빠지므로 그 부재를 알릴 훅도 안 돈다",
+            "wasGrade": "machine"
           }
         ]
       },
@@ -305,13 +305,7 @@
         "spike"
       ],
       "entry": {
-        "machine": [
-          {
-            "id": "requirement-doc-exists",
-            "what": "그 레벨의 요구 문서가 있다",
-            "how": "경로 존재"
-          }
-        ],
+        "machine": [],
         "content": [
           {
             "id": "requirement-covered",
@@ -319,7 +313,14 @@
             "who": "gatekeeper"
           }
         ],
-        "promise": []
+        "promise": [
+          {
+            "id": "requirement-doc-exists",
+            "what": "그 레벨의 요구 문서가 있다",
+            "why": "쓰기 시점에 걸 수는 있으나 **걸면 안 된다** — 도메인 레벨은 요구와 설계가 같은 파일이라(`01.domain/{도메인}.md` 의 요구 절·경계 절) 별도 파일 존재로 못 본다. 게다가 버그·작은 변경은 `/flow:design` 이 요구를 **자동 발급**하는 것이 정상 경로라(traceability/level.md) 요구 문서 선존재를 강제하면 그 경로가 통째로 막힌다",
+            "wasGrade": "machine"
+          }
+        ]
       },
       "loads": {
         "modes": {
@@ -384,12 +385,26 @@
           {
             "id": "unit-task-doc",
             "what": "쓰려는 소스를 담은 task 문서가 있다",
-            "how": "gate-source-write.sh — PreToolUse Write|Edit · Bash 경유 쓰기는 guard 가 물어본다"
+            "how": "gate-source-write.sh (PreToolUse)",
+            "enforcedBy": {
+              "kind": "pretooluse",
+              "hook": "hooks/scripts/gate-source-write.sh",
+              "event": "PreToolUse",
+              "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+              "also": "Bash 경유 쓰기는 guard-danger.sh 가 경로를 뽑아 같은 게이트에 넘긴다"
+            }
           },
           {
             "id": "unit-req-tag",
             "what": "그 task 문서에 요구 태그가 있다",
-            "how": "같음 — frontmatter `requirement:`"
+            "how": "gate-source-write.sh (PreToolUse)",
+            "enforcedBy": {
+              "kind": "pretooluse",
+              "hook": "hooks/scripts/gate-source-write.sh",
+              "event": "PreToolUse",
+              "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+              "also": "같은 훅이 frontmatter `requirement:` 를 본다"
+            }
           }
         ],
         "content": [
@@ -454,13 +469,7 @@
         "sync"
       ],
       "entry": {
-        "machine": [
-          {
-            "id": "unit-task-doc",
-            "what": "task 문서가 있다",
-            "how": "경로 존재"
-          }
-        ],
+        "machine": [],
         "content": [
           {
             "id": "coverage-gap",
@@ -473,6 +482,12 @@
             "id": "run-not-infer",
             "what": "테스트를 실제로 돌려 exit code 로 판정한다 — 추론은 검증이 아니다",
             "canon": "testing"
+          },
+          {
+            "id": "unit-task-doc",
+            "what": "task 문서가 있다",
+            "why": "verify 는 테스트를 돌린다. 그 Bash 를 문서가 없다고 막으면 과차단이고, 과차단은 사람이 훅을 꺼 버리게 만든다",
+            "wasGrade": "machine"
           }
         ]
       },
@@ -598,15 +613,16 @@
         "commit"
       ],
       "entry": {
-        "machine": [
+        "machine": [],
+        "content": [],
+        "promise": [
           {
             "id": "source-changed",
             "what": "소스 변경이 있다",
-            "how": "git diff"
+            "why": "커맨드가 자기 diff 를 보는 것이라 **진행하는 쪽이 자기를 판정**한다 — 정의상 약속이다",
+            "wasGrade": "machine"
           }
-        ],
-        "content": [],
-        "promise": []
+        ]
       },
       "loads": {
         "skills": [
@@ -643,7 +659,13 @@
           {
             "id": "no-drift",
             "what": "소스만 바뀌고 문서가 안 온 상태가 아니다",
-            "how": "drift-hook.sh (pre-commit) — 사람 경로에서도 돈다"
+            "how": "drift-hook.sh (pre-commit) — `/flow:setup` 이 `core.hooksPath` 를 건 프로젝트에서만 돈다. 안 건 프로젝트·플러그인 자체 리포에는 이 층이 없다",
+            "enforcedBy": {
+              "kind": "git-hook",
+              "hook": "git-hooks/drift-hook.sh",
+              "event": "pre-commit",
+              "condition": "`/flow:setup` 이 `core.hooksPath` 를 건 프로젝트에서만 돈다. 안 건 프로젝트·플러그인 자체 리포에는 이 층이 없다"
+            }
           }
         ],
         "content": [],
@@ -900,5 +922,11 @@
       "relation": "콘솔",
       "$why": "채점 결과를 터미널에 낸다 — 문서 산출물이 아니다"
     }
-  }
+  },
+  "$grade-note": [
+    "**`machine` 은 강제하는 훅이 있는 것만이다.** 항목마다 `enforcedBy` 로 무엇이 강제하는지 적고,",
+    "`lint.py` 의 `machine-gate-wired` 검사가 그 훅이 실재하고 `hooks.json` 에 걸렸는지 대조한다.",
+    "배선 없이 `machine` 을 달면 CI 가 실패한다 — v1 이 '4겹'이라 적고 1겹이던 병을 여기서 막는다.",
+    "내린 항목은 `wasGrade: machine` 과 `why` 를 남긴다. 왜 못 거는지가 안 적히면 다시 올라온다."
+  ]
 }
