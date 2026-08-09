@@ -224,14 +224,15 @@ flow 를 설치하면 가드 훅이 함께 붙어 **되돌릴 수 없는 명령�
                 "gate": "…" },                      // 계약 검증 명령 ({file} 치환)
   "build":   { "command": "…" },
   "test":    { "command": "…", "browser": "playwright", "headless": false },
-  "drift":   { "sourceGlobs": ["src/**"], "ignore": ["**/*.md", "spike/**"] },
+  "drift":   { "sourceGlobs": [], "ignore": ["**/*.md", "spike/**"] },   // 비어 있으면 넓게 본다
   "review":  { "severity": "critical" },
   "language": "korean"
 }
 ```
 
 - **키의 뜻과 안 맞을 때 무엇이 조용히 안 도는지는 `/flow:setup` 의 `실행 키는 돌려 보고 적는다` 절이 정본**이고, 계약 판정 규칙은 `contract-gate` 스킬이 갖는다. 여기 옮겨 적지 않는다.
-- `drift.sourceGlobs` 가 채워져 나간다는 점을 놓치기 쉽다 — 프로젝트 구조가 다르면 **그 글로브를 먼저 고친다.**
+- **`drift.sourceGlobs` 는 비어서 나간다.** 값이 있으면 **그 안만** 소스로 치는 화이트리스트라, 코드가 `lib/`·`backend/` 에 있는데 `src/**` 가 남아 있으면 쓰기 게이트와 드리프트 훅이 **함께, 아무 말 없이** 꺼진다. 비어 있으면 `doc/`·`spike/`·`.claude/`·`.github/` 밖이고 `.md` 가 아닌 것이 전부 소스다 — **넓어서 막히는 것은 보이고, 좁아서 안 막히는 것은 안 보인다.**
+- 넓어서 걸리면 `drift.ignore`·`gate.legacyExempt` 로 좁힌다. **`sourceGlobs` 를 좁혀서 풀지 않는다** — 그건 게이트를 통째로 끄는 쪽이다.
 
 ### `CLAUDE.md` — 프로젝트 정체성·가드레일
 

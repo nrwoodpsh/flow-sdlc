@@ -84,17 +84,38 @@ argument-hint: '[list | {원형키} | {git-url} | (비움=대화형)]'
 - 원형 복제는 **빈 프로젝트만**. 기존 코드가 있으면 목록만 참고로 보여준다.
 - 복제는 `--depth 1` → `.git` 제거 → 이름 치환.
 
+### 소스 경로 확정
+
+`drift.sourceGlobs` 는 **값이 있으면 그 안만 소스**로 치는 화이트리스트다. 코드가 `lib/`·`backend/`·`cmd/` 에 있는데
+`src/**` 가 적혀 있으면 **쓰기 게이트와 드리프트 훅이 함께, 아무 말 없이 꺼진다.** 템플릿은 그래서 비운 채로 온다 —
+채우는 것이 이 단계다. **이 단계를 건너뛰지 않는다.**
+
+- **센다** — 소스 확장자 파일이 실제로 어느 최상위 디렉터리에 몇 개 있나. `node_modules`·`vendor`·`dist`·`build`·`target`·`.git` 은 뺀다.
+- **제안하고 확정받는다** — 센 결과를 글로브로 묶어 보여주고 사람이 고른다. 배포 단위가 여럿이면 단위마다 한 줄(`packages/*/src/**`·`services/*/**`·`src/main/java/**`). 남의 디렉터리 이름을 우리 관례로 바꾸지 않는다.
+- **확정 못 하면 비워 둔다.** 빈 값이면 `doc/`·`spike/`·`.claude/`·`.github/` 밖이고 `.md` 가 아닌 것이 전부 소스다. **틀린 값보다 빈 값이 낫다** — 좁으면 안 막혀서 안 보이고, 넓으면 막혀서 보인다. **지어내서 채우지 않는다.**
+- 넓어서 정상 작업이 막히면 `drift.ignore`·`gate.legacyExempt` 로 좁힌다. `sourceGlobs` 를 좁혀서 풀지 않는다 — 그건 게이트를 통째로 끄는 쪽이다.
+
 ### 실행 키는 돌려 보고 적는다
 
 `workflow.config.json` 의 실행 키가 스택과 안 맞으면 게이트가 **조용히 안 돌거나** 매번 실패한다.
 
 | 키 | 무엇 | 안 맞으면 |
 |:--|:--|:--|
+| `drift.sourceGlobs` | 소스 파일 판정 | **쓰기 게이트와 드리프트 훅이 함께 꺼진다** — 위 `소스 경로 확정` |
 | `contract.pathGlob` | 계약 파일 판정 | 계약이 검증 없이 지나간다 |
 | `contract.gate` | 계약 검증 명령 | 게이트가 매번 실패한다 |
 | `build.command` | 전체 빌드 | 전체 컴파일 오류가 커밋까지 안 잡힌다 |
 | `test.command` | 테스트 실행 | 검증이 추론으로 바뀐다 |
 | `test.browser` | 화면 테스트 도구 | 화면이 있으면 검증할 길이 없다 |
+
+- `drift.sourceGlobs` 는 **소스 안 파일 하나와 밖 파일 하나로 게이트를 직접 돌려** 확인한다. 결과를 요약에 적는다.
+
+  ```
+  bash "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/gate-source-write.sh" --path {안쪽 파일} --root . --why
+  bash "${CLAUDE_PLUGIN_ROOT}/hooks/scripts/gate-source-write.sh" --path {바깥 파일} --root . --why
+  ```
+
+  안쪽이 `not-source` 로 나오면 글로브가 틀린 것이다 — 다시 정한다. (유닛이 아직 없으면 안쪽은 `no-units` 로 나온다. 그것이 정상이다.)
 
 - **계약 판정을 경로로 하나 파일명으로 하나**, 오프라인에서 무엇이 달라지나는 `contract-gate` 의 `config` 조각이 정본이다. 여기서 다시 적지 않는다.
 - `contract.gate`·`build.command`·`test.command` 는 **한 번 돌려 Exit 0 을 확인**한다. 못 돌리면 그 사실을 요약에 적는다.
@@ -154,6 +175,7 @@ step Q&A 를 하지 않는다. 빈 프로젝트에서는 도메인·커밋 규�
 
 ```
 채운 것    스택 {감지값} · 테스트 {명령} · 원형 {키}
+소스 범위  {sourceGlobs 또는 "비움 — 기본 규칙"} · 게이트 실측 {안쪽 {판정} / 바깥 {판정}}
 설치됨     {도구 목록}
 남은 것    {사용자가 직접 할 것} — 위 안내 참고
 비워둔 것  도메인 → /flow:prd domain · 커밋 규약 → /flow:commit

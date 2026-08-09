@@ -19,14 +19,23 @@
     "headless": false
   },
   "drift": {
-    "sourceGlobs": [
-      "src/**",
-      "app/**"
+    "$note": [
+      "**sourceGlobs 는 비운 채로 내보낸다.** 값이 있으면 그 안만 소스로 치는 화이트리스트라,",
+      "코드가 lib/·backend/·cmd/ 에 있는 리포에 `src/**` 가 남아 있으면 쓰기 게이트와 드리프트 훅이",
+      "**함께, 아무 말 없이** 꺼진다(D1). 틀린 값은 안 막아서 안 보이고, 빈 값은 넓게 막혀서 보인다.",
+      "비어 있으면 doc/·spike/·.claude/·.github/ 밖이고 .md 가 아닌 것이 전부 소스다.",
+      "/flow:setup 의 `소스 경로 확정` 단계가 스캔해 채운다 — 확정 못 하면 비운 채로 둔다.",
+      "ignore 의 뒤 세 줄은 빈 sourceGlobs 의 부작용을 막는 것이다:",
+      "이 설정 파일 자신이 소스로 잡히면 게이트가 자기 근거를 못 고치게 잠근다. 잠금 파일은 생성물이다."
     ],
+    "sourceGlobs": [],
     "ignore": [
       "**/*.md",
       "**/*.test.*",
-      "spike/**"
+      "spike/**",
+      "workflow.config.json",
+      "**/*.lock",
+      "**/*-lock.json"
     ]
   },
   "gate": {
