@@ -1290,6 +1290,175 @@ def _entry_grade_parity(ctx):
     return r
 
 
+# ═══════════════════════════════════════════════════════════════════
+# v1 에서 늦게 되찾은 검사들
+#
+# 아래 다섯은 v1 `lint-docs.py` 에 있었고 v2 첫 이식에서 빠졌다.
+# **진단(`diag-C`)의 잘못이다** — `남길 것` 에도 `버릴 것` 에도 안 적어 두 목록 사이로 샜고,
+# 구현은 진단을 따랐다. 되돌림 실험으로 전부 미탐임을 확인하고 되살린다
+# (`doc/00.diagnosis/review-v2-resume.md` 3-2).
+#
+# **v1 검사 8(절 참조 금지)은 되살리지 않는다.** 그 규칙의 전제가 v2 에서 깨졌다 —
+# v1 은 스킬이 통째로 실려서 절 이름이 정보를 안 주고 깨질 자리만 만들었지만,
+# v2 는 조각을 낱개로 싣는다. `` `traceability` 의 `level` `` 은 금지할 참조가 아니라
+# **주소**다. 대신 그 주소가 실재하는지를 본다 (`fragment-reference-exists`).
+# ═══════════════════════════════════════════════════════════════════
+
+FM_FILES = ('plugins/flow/commands/*.md', 'plugins/flow/agents/*.md',
+            'plugins/flow/skills/*/SKILL.md')
+
+
+@check('frontmatter-lowercase', 'frontmatter 키 소문자',
+       '대문자 키를 Claude Code 가 못 읽어 커맨드·스킬이 안 뜬다 (v1 검사 6)')
+def _frontmatter_lowercase(ctx):
+    # `argument-hint-quoted` 와 같은 사고 계열이다 — **파일이 통째로 안 뜨고 조용하다.**
+    # 그쪽만 이식되고 이쪽이 빠져 있었다.
+    r = Result(unit='키')
+    for f in ctx.paths(*FM_FILES):
+        s = ctx.read(f)
+        if not s.startswith('---'):
+            r.targets += 1
+            r.fail(f"frontmatter 없음 {ctx.rel(f)} — `---` 로 시작해야 파일이 뜬다")
+            continue
+        for k in re.findall(r'^([A-Za-z-]+):', s.split('---')[1], re.M):
+            r.targets += 1
+            if k != k.lower():
+                r.fail(f"frontmatter 대문자 키 {ctx.rel(f)} — `{k}` "
+                       f"(소문자로. Claude Code 가 못 읽어 안 뜬다)")
+    return r
+
+
+def _anchors(path):
+    """헤딩 → GitHub 앵커. 기호를 떼고 소문자·공백을 `-` 로."""
+    out = set()
+    try:
+        with open(path, encoding='utf-8') as fh:
+            for l in fh:
+                m = re.match(r'#{1,6}\s+(.*)', l)
+                if m:
+                    t = re.sub(r'[`*\[\]():.,—·?/\\]', '', m.group(1).strip())
+                    out.add(t.lower().replace(' ', '-'))
+    except OSError:
+        pass
+    return out
+
+
+@check('link-target-exists', '링크 대상·앵커 실존',
+       '헤딩 이름을 바꾸면 링크가 조용히 깨진다 (v1 검사 1-2)')
+def _link_target_exists(ctx):
+    r = Result(unit='링크')
+    for f in ctx.render_files():
+        s = ctx.read(f)
+        d = os.path.dirname(f)
+        for m in re.finditer(r'\]\(([^)]+)\)', s):
+            u = m.group(1)
+            if u.startswith(('http', '#', 'mailto:')):
+                continue
+            path, _, frag = u.partition('#')
+            r.targets += 1
+            tgt = os.path.normpath(os.path.join(d, path)) if path else f
+            ln = 1 + s[:m.start()].count('\n')
+            if not os.path.exists(tgt):
+                r.fail(f"링크 대상 없음 {ctx.rel(f)}:{ln} — {u}")
+            elif frag and frag.lower() not in _anchors(tgt):
+                r.fail(f"앵커 없음 {ctx.rel(f)}:{ln} — {u} (헤딩 이름이 바뀌었나)")
+    return r
+
+
+def _uncoded(line):
+    """인라인 코드(`` `…` ``)를 지운 줄. 백틱 안은 **인용**이라 대상이 아니다."""
+    return re.sub(r'`[^`]*`', '', line)
+
+
+@check('placeholder-leak', '자리표시자 유출',
+       '템플릿 밖의 `{{ }}` 를 사용자가 내용으로 읽는다 (v1 검사 3)')
+def _placeholder_leak(ctx):
+    # v1 은 "자리표시자를 설명하는 줄"을 낱말 목록으로 뺐다. 그 목록은 늘 모자란다 —
+    # 이 repo 만 해도 그 목록에 없는 형태로 일곱 곳이 자리표시자를 **인용**한다.
+    # 백틱이 그 판정을 대신한다. 사용자가 내용으로 읽는 것은 **백틱 밖에 맨몸으로 있는 것**이다.
+    r = Result(unit='자리표시자')
+    for f in ctx.instruction_files():
+        rel = ctx.rel(f)
+        if 'project-template' in rel:
+            continue                      # 사람이 채우는 골격이다. 거기 있는 것이 정상
+        for i, l in enumerate(ctx.lines(f), 1):
+            for _ in re.finditer(r'\{\{.*?\}\}', l):
+                r.targets += 1
+            bare = _uncoded(l)
+            if re.search(r'\{\{.*?\}\}', bare):
+                r.fail(f"자리표시자 유출 {rel}:{i} — {bare.strip()[:60]} "
+                       f"(인용이면 백틱으로 감싼다)")
+    return r
+
+
+FRAG_REF = re.compile(r'`([a-z][a-z0-9-]*)`\s*의\s*`([^`]+)`')
+
+
+@check('fragment-reference-exists', '산문이 가리킨 조각 실존',
+       '없는 조각을 가리키면 그 자리에서 읽을 것이 사라진다 (v1 검사 8 의 v2 판)')
+def _fragment_reference_exists(ctx):
+    # `command-loads-parity` 는 `## 연결` **표**만 본다. 절차·에이전트 본문의 산문 참조는
+    # 아무도 안 봤다 — 조각 이름을 바꾸면 그쪽이 조용히 죽는다.
+    r = Result(unit='조각 참조')
+    skills = {os.path.basename(os.path.dirname(p)) for p in ctx.skills()}
+    have = {f"{os.path.basename(os.path.dirname(os.path.dirname(p)))}/"
+            f"{os.path.basename(p)[:-3]}"
+            for p in ctx.paths('plugins/flow/skills/*/references/*.md')}
+    for f in ctx.instruction_files():
+        for i, l in enumerate(ctx.lines(f), 1):
+            for who, frag in FRAG_REF.findall(l):
+                # 스킬 이름이 아니면 조각 참조가 아니다 — 도메인 예시(`approval` 의 `DR-*`) 등
+                if who not in skills:
+                    continue
+                r.targets += 1
+                if f"{who}/{frag}" not in have:
+                    r.fail(f"없는 조각 {ctx.rel(f)}:{i} — `{who}` 의 `{frag}` "
+                           f"(`skills/{who}/references/{frag}.md` 가 없다)")
+    return r
+
+
+@check('plantuml-pragma', 'PlantUML 렌더 전제',
+       '`!pragma layout smetana` 가 없으면 Graphviz 없이 안 그려진다 (v1 검사 5)')
+def _plantuml_pragma(ctx):
+    r = Result(unit='블록')
+    for f in ctx.render_files():
+        s = ctx.read(f)
+        for m in re.finditer(r'```plantuml\n(.*?)```', s, re.S):
+            r.targets += 1
+            if 'pragma layout smetana' not in m.group(1):
+                ln = s[:m.start()].count('\n') + 1
+                r.fail(f"PlantUML {ctx.rel(f)}:{ln} — `!pragma layout smetana` 없음 "
+                       f"(Graphviz 없이 렌더 안 됨)")
+    return r
+
+
+FLUFF = re.compile(r'(?<![가-힣])(매우|아주|정말|굉장히|훨씬|상당히|다양한|여러가지|손쉽게'
+                   r'|간편하게|효율적으로|효과적으로|최적화된|강력한|유연한|풍부한|성공적으로'
+                   r'|원활하게)(?![가-힣])')
+
+
+@check('fluff', '미사여구',
+       '뜻을 안 더하는 강조가 지시서에 실린다 (`plain-writing` · v1 검사 11)')
+def _fluff(ctx):
+    r = Result(unit='줄')
+    for f in ctx.instruction_files():
+        rel = ctx.rel(f)
+        # 규칙을 적는 스킬 자신은 금지어를 예로 들 수밖에 없다
+        if 'skills/plain-writing/' in rel:
+            continue
+        L = ctx.lines(f)
+        fenced = fenced_map(L)
+        for i, l in enumerate(L, 1):
+            if fenced[i - 1] or not l.strip():
+                continue
+            r.targets += 1
+            m = FLUFF.search(l)
+            if m:
+                r.fail(f"미사여구 {rel}:{i} — `{m.group(1)}` "
+                       f"(`plain-writing` — 뜻을 안 더하면 지운다)")
+    return r
+
+
 # ── 실행 ──
 
 def run(ctx, only=None):

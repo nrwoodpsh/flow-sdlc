@@ -439,6 +439,55 @@ CASES = {
         _built(),
         _built(corrupt=True),
     ),
+
+    # ── v1 에서 늦게 되찾은 검사 (review-v2-resume 3-2) ──
+    'frontmatter-lowercase': (
+        {'plugins/flow/commands/build.md':
+            "---\nname: build\ndescription: 구현한다\n---\n\n# build\n"},
+        # `Description:` — Claude Code 가 못 읽어 커맨드가 아예 안 뜬다
+        {'plugins/flow/commands/build.md':
+            "---\nname: build\nDescription: 구현한다\n---\n\n# build\n"},
+    ),
+    'link-target-exists': (
+        {'doc/case.md': "# 문서\n\n[대상](target.md#절-이름)\n",
+         'doc/target.md': "# 대상\n\n## 절 이름\n"},
+        # 헤딩 이름이 바뀌어 앵커가 죽었다 — 파일은 있어서 눈으로는 안 보인다
+        {'doc/case.md': "# 문서\n\n[대상](target.md#절-이름)\n",
+         'doc/target.md': "# 대상\n\n## 바뀐 이름\n"},
+    ),
+    'placeholder-leak': (
+        # 백틱 안은 **인용**이다 — 자리표시자를 설명하는 정상 용례
+        {'plugins/flow/commands/setup.md':
+            "---\nname: setup\n---\n\n# setup\n\n`{{프로젝트명}}` 을 채운다.\n"},
+        # 맨몸으로 남았다 — 사용자가 내용으로 읽는다
+        {'plugins/flow/commands/setup.md':
+            "---\nname: setup\n---\n\n# setup\n\n프로젝트는 {{프로젝트명}} 이다.\n"},
+    ),
+    'fragment-reference-exists': (
+        {**_skill('traceability', "요구 ID 를 발급한다.\n\n## 경계\n\n끝.\n"),
+         'plugins/flow/skills/traceability/references/level.md': "# 레벨\n\n셋이다.\n",
+         'plugins/flow/commands/prd.md':
+            "---\nname: prd\n---\n\n# prd\n\n레벨은 `traceability` 의 `level` 이다.\n"},
+        # 조각 이름을 바꿨는데 산문 참조가 안 따라왔다 — 그 자리에서 읽을 것이 사라진다
+        {**_skill('traceability', "요구 ID 를 발급한다.\n\n## 경계\n\n끝.\n"),
+         'plugins/flow/skills/traceability/references/level.md': "# 레벨\n\n셋이다.\n",
+         'plugins/flow/commands/prd.md':
+            "---\nname: prd\n---\n\n# prd\n\n레벨은 `traceability` 의 `없는조각` 이다.\n"},
+    ),
+    'plantuml-pragma': (
+        {'doc/case.md':
+            f"# 그림\n\n{F}plantuml\n@startuml\n!pragma layout smetana\nA -> B\n@enduml\n{F}\n"},
+        # Graphviz 없는 환경에서 렌더가 실패한다
+        {'doc/case.md':
+            f"# 그림\n\n{F}plantuml\n@startuml\nA -> B\n@enduml\n{F}\n"},
+    ),
+    'fluff': (
+        {'plugins/flow/commands/build.md':
+            "---\nname: build\n---\n\n# build\n\n설계대로 구현한다.\n"},
+        # 뜻을 안 더하는 강조 — `plain-writing` 이 금한다
+        {'plugins/flow/commands/build.md':
+            "---\nname: build\n---\n\n# build\n\n매우 강력한 방식으로 구현한다.\n"},
+    ),
 }
 
 
