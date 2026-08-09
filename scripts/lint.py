@@ -1317,6 +1317,199 @@ def _read_order_wired(ctx):
     return r
 
 
+# ── 절차 조각 배선 — topology ↔ 디스크 ↔ 커맨드 본문 ──
+# **`read-order-wired` 는 없는 절차 파일을 조용히 건너뛴다**(`if not os.path.isfile(p): continue`).
+# 그래서 `commands.*.procedures` 에 오타를 내면 그 커맨드는 절차를 하나도 안 읽는데 검사기는
+# 전부 초록이다. 지금 배선 13건이 전부 디스크에 있는 것은 **지켜져서가 아니라 우연이다.**
+#
+# `command-loads-parity` 도 이 자리를 안 본다 — 그쪽이 대조하는 것은 `loads`(스킬·조각)뿐이고
+# `procedures` 는 다른 키다. 그래서 **세 곳을 양방향으로 대조한다.**
+#
+#   ① 선언 ↔ 디스크 — 없는 파일을 가리키나 · 아무도 안 싣는 파일이 남아 있나
+#   ② 선언 ↔ 커맨드 본문 — 싣는다고 적어 두고 본문이 한 번도 안 가리키면 읽힐 계기가 없다.
+#      반대로 본문이 가리키는데 선언에 없으면 그 파일은 그 커맨드에 실리지 않는다
+#   ③ `## 연결` 의 `절차 조각` 행 — 행이 있으면 선언과 낱낱이 같아야 한다
+#
+# **`## 연결` 에 행이 있는 것까지는 요구하지 않는다.** `design` 은 레벨이 어느 절차를 읽는지
+# 가르므로 그 표를 `## 절차` 안에 두었다(`design.md:63-66`) — 연결 절에 무조건 행을 요구하면
+# 조건부 구조를 가진 커맨드가 늘 읽는 것처럼 적게 된다. 요구하는 것은 **본문 어딘가가
+# 그 경로를 가리키는 것**이고, 행이 있으면 그 행이 정확한지까지 본다.
+PROC_DIR = 'plugins/flow/procedures'
+PROC_PATH = re.compile(r'procedures/([a-z0-9-]+(?:/[a-z0-9-]+)*)\.md')
+PROC_ROW = '절차 조각'
+
+
+@check('procedures-wired', '절차 조각 배선 (topology ↔ 디스크 ↔ 본문)',
+       '없는 절차를 가리켜도 `read-order-wired` 가 조용히 건너뛴다 (T7 구현 1)')
+def _procedures_wired(ctx):
+    r = Result(unit='절차 조각')
+    t = _topo(ctx)
+    if not t:
+        return r
+    cmds = t.get('commands') or {}
+    base = os.path.join(ctx.root, PROC_DIR)
+    on_disk = {os.path.relpath(p, base).replace(os.sep, '/')[:-3]
+               for p in ctx.paths(f'{PROC_DIR}/**/*.md')}
+
+    declared = {}
+    for name, c in sorted(cmds.items()):
+        for x in ((c or {}).get('procedures') or []):
+            declared.setdefault(str(x), []).append(name)
+
+    # ① 선언 ↔ 디스크 — 양방향
+    for x, who in sorted(declared.items()):
+        r.targets += 1
+        if x not in on_disk:
+            r.fail(f"없는 절차를 싣는다 — commands.{' · '.join(who)}.procedures 의 `{x}` 는 "
+                   f"`{PROC_DIR}/{x}.md` 가 없다 (오타면 그 커맨드는 절차를 안 읽는데 "
+                   f"아무도 알려 주지 않는다)")
+    for x in sorted(on_disk - set(declared)):
+        r.targets += 1
+        r.fail(f"아무도 안 싣는 절차 — `{PROC_DIR}/{x}.md` 가 어느 커맨드의 "
+               f"`procedures` 에도 없다 (실릴 자리가 없으면 배포만 되고 안 읽힌다 — "
+               f"싣거나 지운다)")
+
+    # ② 선언 ↔ 커맨드 본문 · ③ `## 연결` 의 절차 조각 행
+    for name, c in sorted(cmds.items()):
+        p = os.path.join(ctx.root, f'plugins/flow/commands/{name}.md')
+        if not os.path.isfile(p):
+            continue
+        mine = [str(x) for x in ((c or {}).get('procedures') or [])]
+        named = set(PROC_PATH.findall(ctx.read(p)))
+        for x in mine:
+            r.targets += 1
+            if x not in named:
+                r.fail(f"본문이 안 가리킨다 {ctx.rel(p)} — topology 는 `{x}` 를 싣는다고 "
+                       f"적는데 본문에 그 경로가 없다 (실려도 읽으라는 말이 없으면 "
+                       f"안 읽는다)")
+        for x in sorted(named - set(mine)):
+            r.targets += 1
+            r.fail(f"배선 없는 절차를 가리킨다 {ctx.rel(p)} — 본문이 `{x}` 를 적는데 "
+                   f"`commands.{name}.procedures` 에 없다 (그 자리에서는 안 실린다 — "
+                   f"정본에 먼저 적는다)")
+
+        sec = _section(ctx, p, '연결')
+        rows = [line for lab, line in _table_rows(sec or '') if lab == PROC_ROW]
+        if not rows:
+            continue
+        r.targets += 1
+        got = {x for line in rows for x in PROC_PATH.findall(line)}
+        if got != set(mine):
+            miss = sorted(set(mine) - got)
+            over = sorted(got - set(mine))
+            r.fail(f"연결 절 절차 행 어긋남 {ctx.rel(p)} — "
+                   + (f"빠진 것 {_names(miss)} " if miss else '')
+                   + (f"초과 {_names(over)} " if over else '')
+                   + f"(`## 연결` 의 `{PROC_ROW}` 행은 `commands.{name}.procedures` 와 "
+                     f"낱낱이 같아야 한다)")
+    return r
+
+
+# ── 도달 불가 커맨드 — 라우터에서 갈 수 없는 국면 ──
+# **재설계 D7 이 여기다.** `next.next` 에 `setup`·`spike`·`publish` 가 없어서, `next.md` 가
+# 스스로 *"커맨드를 지어내지 않는다 — 위상 정본에 있는 것만 부른다"* 라고 못 박은 그 규칙대로
+# 하면 라우터가 그 셋을 영원히 제시할 수 없었다. 그런데 `next.md` 본문은 설정이 없으면
+# `/flow:setup` 을 안내하라 하고 유형 칸에는 `불확실`(→ `spike`)을 출력하라 한다 —
+# **본문이 데이터에 없는 길을 안내한다.**
+#
+# **"도달 불가"를 어떻게 정의하나 — 이 검사의 값어치가 거기 있다.**
+# 모든 커맨드가 `next` 로만 도달해야 하는 것은 아니다. 판정 기준은 이것으로 잡는다:
+#
+#   **사용자가 커맨드 이름을 몰라도 그 국면에 닿을 수 있나.**
+#
+# 이름을 알고 치는 사람은 어디든 간다 — 그건 위상이 아니라 기억이다. 제품이 책임지는 것은
+# *모르는 사람이 도착하는 길*이고, 그 길의 정본이 이 파일의 `next` 간선이다.
+# 그래서 **진입점에서 `next` 간선을 따라 닿지 않는 커맨드는 도달 불가**로 본다.
+#
+# **진입점을 스크립트에 손으로 열거하지 않는다** — v1 의 화이트리스트 22개가 그렇게 낡았다.
+# 정본은 데이터다: `commands.<이름>.entryPoint: true` 를 단 커맨드가 진입점이고, 왜 그런지를
+# `$entryPoint-why` 로 남긴다. 진입점을 늘려 검사를 무르게 만드는 길은 **`after` 가 막는다** —
+# 앞에 와야 하는 국면이 있는 커맨드는 진입점이 될 수 없다. 시작점인데 선행 조건이 있다는 말은
+# 앞뒤가 안 맞는다.
+#
+# **되돌아가는 간선도 여기서 본다.** `after` 는 실패했을 때 되돌아가는 앞 국면이고
+# (`next.md` — *"게이트가 실패하면 사유와 함께 직전 국면을 다시 실행한다"*), `gate-timing` 도
+# `after` 를 그 뜻으로 읽는다. 되돌아간 뒤 다시 앞으로 오지 못하면 그건 **편도 되돌림**이다 —
+# `X.after` 에 `Y` 가 있으면 `Y.next` 에 `X` 가 있어야 한다.
+#
+# **반대 방향(앞으로만 있는 간선)은 요구하지 않는다.** `setup.next` 는 `prd`·`design` 인데
+# `design.after` 는 `prd` 뿐이다 — 앞으로 가는 지름길은 있어도 되돌아갈 자리는 요구를 만든
+# 국면이라 다르다. 대칭을 요구하면 아무것도 안 만드는 국면으로 되돌아가라고 적게 된다.
+#
+# **못 잡는 것** — 간선이 있어도 커맨드 본문이 그 유형을 어디로 보내는지 안 적으면 라우터는
+# 여전히 헤맨다. 그 축은 데이터가 아니라 산문이라 기계가 못 본다.
+@check('route-reachable', '도달 불가 커맨드 · 편도 되돌림',
+       '라우터가 부를 수 없는 국면이 위상에 남는 것 (재설계 D7 · 능력 5)')
+def _route_reachable(ctx):
+    r = Result(unit='커맨드')
+    t = _topo(ctx)
+    if not t:
+        return r
+    cmds = t.get('commands') or {}
+    if not cmds:
+        return r                      # 위상이 비었다 — `topology-pending` 이 지목한다
+
+    edges = {n: [str(x) for x in ((c or {}).get('next') or [])] for n, c in cmds.items()}
+    backs = {n: [str(x) for x in ((c or {}).get('after') or [])] for n, c in cmds.items()}
+
+    # ① 간선이 실재하는 커맨드를 가리키나 — 오타는 간선을 조용히 없앤다
+    for n in sorted(cmds):
+        for key, xs in (('next', edges[n]), ('after', backs[n])):
+            for x in xs:
+                r.targets += 1
+                if x not in cmds:
+                    r.fail(f"없는 커맨드를 가리킨다 — commands.{n}.{key} 의 `{x}` 가 "
+                           f"`commands` 에 없다 (그 간선은 아무 데도 안 간다)")
+
+    # ② 진입점 선언 — 없으면 이 검사는 아무것도 판정하지 못한다
+    roots = []
+    for n, c in sorted(cmds.items()):
+        if not (c or {}).get('entryPoint'):
+            continue
+        r.targets += 1
+        roots.append(n)
+        if not (c or {}).get('$entryPoint-why'):
+            r.fail(f"진입점 이유가 없다 — commands.{n}.entryPoint 에 `$entryPoint-why` 가 "
+                   f"없다 (왜 아무 앞 국면 없이 여기서 시작하나를 못 적으면 진입점을 늘려 "
+                   f"이 검사를 끄는 길이 된다)")
+        if backs[n]:
+            r.fail(f"진입점인데 앞 국면이 있다 — commands.{n}.after 가 "
+                   f"{_names(backs[n])} 다. 앞에 와야 하는 국면이 있는 커맨드는 시작점이 "
+                   f"아니다 (`entryPoint` 를 떼거나 `after` 를 비운다)")
+    if not roots:
+        r.targets += 1
+        r.fail("진입점이 없다 — `commands.<이름>.entryPoint: true` 를 단 커맨드가 하나도 "
+               "없어서 도달 가능성을 계산할 자리가 없다 (사용자가 이름을 몰라도 부르는 "
+               "커맨드에 단다)")
+        return r
+
+    # ③ 진입점에서 `next` 간선을 따라 닿나
+    seen, stack = set(roots), list(roots)
+    while stack:
+        for x in edges.get(stack.pop(), []):
+            if x in cmds and x not in seen:
+                seen.add(x)
+                stack.append(x)
+    for n in sorted(cmds):
+        r.targets += 1
+        if n not in seen:
+            r.fail(f"도달 불가 — commands.{n} 이 진입점({' · '.join(roots)})에서 `next` 를 "
+                   f"따라 닿지 않는다. 이름을 아는 사람만 갈 수 있는 국면이다 "
+                   f"(앞 국면의 `next` 에 넣거나, 시작점이면 `entryPoint` 로 선언한다)")
+
+    # ④ 편도 되돌림 — 되돌아간 국면에서 다시 앞으로 못 온다
+    for n in sorted(cmds):
+        for y in backs[n]:
+            if y not in cmds:
+                continue                       # ① 이 이미 지목했다
+            r.targets += 1
+            if n not in edges.get(y, []):
+                r.fail(f"편도 되돌림 — commands.{n}.after 가 `{y}` 를 앞 국면으로 적는데 "
+                       f"`commands.{y}.next` 에 `{n}` 이 없다. 실패해서 되돌아가면 다시 "
+                       f"앞으로 올 길이 없다 (두 간선은 짝이다)")
+    return r
+
+
 # ── 스킬 description 의 등급 ↔ 문형 ──
 # v1 은 자율 7개 중 6개가 오발동 억제 신호(`/flow:X 가 쓴다`)를 달아 **등급이 사실상 뒤집혔다**
 # (diag-B 3-a). v2 는 등급을 데이터로 두고 문형을 대조한다.

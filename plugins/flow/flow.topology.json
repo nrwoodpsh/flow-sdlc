@@ -276,14 +276,29 @@
       "order": 2,
       "phase": "라우팅",
       "after": [],
+      "entryPoint": true,
+      "$entryPoint-why": [
+        "**사용자가 커맨드 이름을 몰라도 부르는 유일한 자리다.** 나머지 커맨드는 전부 여기서",
+        "`next` 간선을 따라 닿아야 한다 — 닿지 않으면 이름을 아는 사람만 갈 수 있는 국면이고,",
+        "그것이 재설계 D7 이 지목한 상태였다(`setup`·`spike`·`publish` 가 라우터 밖).",
+        "`lint.py` 의 `route-reachable` 이 여기서 출발해 계산한다."
+      ],
       "next": [
+        "setup",
         "prd",
         "design",
         "build",
         "verify",
         "review",
         "sync",
-        "commit"
+        "commit",
+        "spike",
+        "publish"
+      ],
+      "$next-why": [
+        "**라우터는 위상에 적힌 것만 부른다**(`next.md` 가드레일). 그래서 본문이 안내하는 길이",
+        "여기 다 있어야 한다 — `setup`(설정이 없을 때) · `spike`(유형 `불확실`) ·",
+        "`publish`(수렴 뒤 발행). 셋이 빠져 있던 것이 D7 이다."
       ],
       "entry": {
         "machine": [],
@@ -727,7 +742,12 @@
         "review"
       ],
       "next": [
-        "commit"
+        "commit",
+        "publish"
+      ],
+      "$next-why": [
+        "`publish.after` 가 `sync` 다 — 되돌아가는 간선만 있고 앞으로 오는 간선이 없으면",
+        "발행 국면은 이름을 아는 사람만 갈 수 있다(D7). 짝을 맞춘다."
       ],
       "entry": {
         "machine": [],

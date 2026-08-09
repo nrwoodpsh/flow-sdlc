@@ -360,6 +360,51 @@ def _wiring(loads, name='build', procedures=(), body=''):
     return files
 
 
+def _procs(declared, disk=('build/unit-verify',)):
+    """절차 조각 배선 — topology 선언 · 디스크 파일 · 커맨드 본문(`## 연결` 행) 세 곳.
+
+    셋을 한 픽스처에 둔다. **선언에 오타를 내면** 디스크에 없는 것을 싣고, 디스크의 파일은
+    아무도 안 싣는 상태가 된다 — `read-order-wired` 가 조용히 건너뛰던 그 자리다.
+    """
+    root = '${CLAUDE_PLUGIN_ROOT}'
+    files = {TOPO_REL: json.dumps(
+        {'version': 1, 'skills': {},
+         'commands': {'build': {'order': 1, 'phase': '구현', 'after': [], 'next': [],
+                                'entry': {'machine': [], 'content': [], 'promise': []},
+                                'exit': {'content': []},
+                                'loads': None, 'procedures': list(declared)}}},
+        ensure_ascii=False, indent=2)}
+    for x in disk:
+        files[f'plugins/flow/procedures/{x}.md'] = f"# {x}\n\n절차 본문이다.\n"
+    cells = ' · '.join(f'`{root}/procedures/{x}.md`' for x in declared)
+    files['plugins/flow/commands/build.md'] = (
+        "---\nname: build\n---\n\n# build\n\n## 연결\n\n| 무엇 | 이름 |\n|:--|:--|\n"
+        f"| 절차 조각 | {cells} |\n\n## 경계\n\n끝.\n")
+    return files
+
+
+def _routes(design_next):
+    """라우터 하나(`entryPoint`)와 국면 둘. `design_next` 가 비면 `build` 가 라우터에서 끊긴다.
+
+    끊긴 상태는 D7 그 자체다 — `build.after` 는 `design` 을 앞 국면으로 적는데 `design` 에서
+    앞으로 오는 간선이 없어, 이름을 아는 사람만 갈 수 있고 되돌아가면 못 돌아온다.
+    """
+    def cmd(order, phase, after, nxt, root=False):
+        c = {'order': order, 'phase': phase, 'after': list(after), 'next': list(nxt),
+             'entry': {'machine': [], 'content': [], 'promise': []},
+             'exit': {'content': []}, 'loads': None, 'procedures': None}
+        if root:
+            c['entryPoint'] = True
+            c['$entryPoint-why'] = '사용자가 커맨드 이름을 몰라도 부르는 자리다'
+        return c
+    return {TOPO_REL: json.dumps(
+        {'version': 1, 'commands': {
+            'next': cmd(1, '라우팅', [], ['design'], root=True),
+            'design': cmd(2, '설계', [], design_next),
+            'build': cmd(3, '구현', ['design'], [])}},
+        ensure_ascii=False, indent=2)}
+
+
 def _dup(copy):
     """조각(규약)과 커맨드(지시). `copy=True` 면 커맨드가 규약 문장을 그대로 옮겼다."""
     canon = "- **`확인 필요` 를 게이트 우회용으로 쓰지 않는다** — 신규 요구를 그렇게 적으면 판정에 남는다\n"
@@ -609,6 +654,20 @@ CASES = {
         # 읽으라 지시했는데 `loads` 에 없다 = 그 자리에서 읽을 수 없는 지시다
         _wiring({'skills': ['code-graph'], 'fragments': ['code-graph/query']},
                 body="계약 범위는 `code-graph` 의 `service-boundary` 조각을 읽는다.\n"),
+    ),
+
+    # ── 절차 조각 배선 (topology ↔ 디스크 ↔ 본문) ──
+    'procedures-wired': (
+        _procs(('build/unit-verify',)),
+        # 선언에 오타를 냈다 — 없는 절차를 싣고, 디스크의 절차는 아무도 안 싣는다 (T7 구현 1)
+        _procs(('build/unit-verifyy',)),
+    ),
+
+    # ── 도달 불가 커맨드 · 편도 되돌림 ──
+    'route-reachable': (
+        _routes(['build']),
+        # 앞 간선이 없다 — 라우터에서 `build` 에 닿지 않고 되돌아가면 못 돌아온다 (D7)
+        _routes([]),
     ),
 
     # ── 절 이름 번호·라벨 금지 ──
