@@ -1,0 +1,78 @@
+{
+  "$note": [
+    "flow 의 프로젝트 설정 정본이다. 훅·커맨드·스킬이 이 파일을 읽는다.",
+    "**이 파일이 없으면 flow 프로젝트가 아니다** — 게이트 훅이 조용히 통과한다(남의 프로젝트에서 말을 걸지 않는다).",
+    "v1 은 템플릿 버전을 `03.templates/VERSION` 이라는 자체 형식(주석 + `flow:` + `복사:` 목록)에 뒀다.",
+    "JSON 파서가 이미 여기 있는데 정규식으로 읽을 형식을 하나 더 둘 이유가 없다 — `templates` 절로 흡수했다(diag-C 2절)."
+  ],
+
+  "contract": {
+    "pathGlob": "*/3.contract/*.ts",
+    "gate": "npx -y -p typescript tsc --noEmit --strict {file}"
+  },
+  "build": {
+    "command": "npm run build"
+  },
+  "test": {
+    "command": "npm test",
+    "browser": "",
+    "headless": false
+  },
+  "drift": {
+    "$note": [
+      "**sourceGlobs 는 비운 채로 내보낸다.** 값이 있으면 그 안만 소스로 치는 화이트리스트라,",
+      "코드가 lib/·backend/·cmd/ 에 있는 리포에 `src/**` 가 남아 있으면 쓰기 게이트와 드리프트 훅이",
+      "**함께, 아무 말 없이** 꺼진다(D1). 틀린 값은 안 막아서 안 보이고, 빈 값은 넓게 막혀서 보인다.",
+      "비어 있으면 doc/·spike/·.claude/·.github/ 밖이고 .md 가 아닌 것이 전부 소스다.",
+      "/flow:setup 의 `소스 경로 확정` 단계가 스캔해 채운다 — 확정 못 하면 비운 채로 둔다.",
+      "ignore 의 뒤 세 줄은 빈 sourceGlobs 의 부작용을 막는 것이다:",
+      "이 설정 파일 자신이 소스로 잡히면 게이트가 자기 근거를 못 고치게 잠근다. 잠금 파일은 생성물이다."
+    ],
+    "sourceGlobs": ["src/**", "lib/**"],
+    "ignore": [
+      "**/*.md",
+      "**/*.test.*",
+      "spike/**",
+      "workflow.config.json",
+      "**/*.lock",
+      "**/*-lock.json"
+    ]
+  },
+  "gate": {
+    "$note": [
+      "**쓰기 게이트의 면제 — 비운 채로 내보낸다.** 기본은 면제 없음이다.",
+      "면제는 *이 구역은 flow 가 관리하지 않는다* 는 선언이다. **이번에 고치는 파일을 여는 자리가 아니다** —",
+      "그건 task 문서의 File Map 에 적는다. 둘을 섞으면 게이트가 이름만 남는다.",
+      "항목 형식 — `{ path, why, scope, until, added }`. 정본은 플러그인 flow.topology.json 의",
+      "gate.exemptions 중 legacy-exempt 다(scope 두 가지·만료·넓이 규칙이 거기 있다). 요약:",
+      "  scope unmanaged — 벤더 배포본·생성물·남의 팀 소유. 우리가 안 고친다. 만료 없음",
+      "  scope legacy    — 아직 안 덮은 우리 레거시. until(YYYYMMDD) 이 있어야 한다",
+      "  글로브 문자열만 적어도 받는다. 단 그때는 통과가 아니라 **쓸 때마다 사람에게 묻는다**",
+      "  와일드카드 없는 경로 조각이 없는 글로브(** · **/*.ts)는 무시한다 — 그건 게이트 끄기다",
+      "누가 채우나 — /flow:setup 의 `면제 구역 확정`(기존 코드가 있을 때) · /flow:build 가 막혔을 때 사람 승인 후.",
+      "예시 항목:",
+      "  { \"path\": \"vendor/**\", \"why\": \"벤더 배포본 — 우리가 고치지 않는다\", \"scope\": \"unmanaged\", \"added\": \"20260101\" }",
+      "  { \"path\": \"lib/billing-legacy/**\", \"why\": \"역추출 전 · BILL-0 으로 덮는다\", \"scope\": \"legacy\", \"until\": \"20260630\", \"added\": \"20260101\" }"
+    ],
+    "legacyExempt": []
+  },
+  "review": {
+    "severity": "critical"
+  },
+  "publish": {
+    "target": "",
+    "notionParent": ""
+  },
+  "theme": {
+    "source": "",
+    "stack": "",
+    "targetPath": ""
+  },
+  "templates": {
+    "$note": "`03.templates/` 가 복사된 시점. /flow:setup 업데이트 모드가 flowVersion 을 플러그인 버전과 비교한다. localEdits 에 적은 템플릿은 업데이트에서 건너뛴다",
+    "flowVersion": "0.9.0",
+    "copiedAt": "20260809",
+    "localEdits": []
+  },
+  "language": "korean"
+}

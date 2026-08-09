@@ -1,0 +1,48 @@
+세팅을 끝냈습니다. 사용자 지시대로 되묻지 않고, 감지한 것만 채우고 나머지는 비웠습니다.
+
+```
+채운 것    스택 TypeScript + Node (npm · tsc · vitest) · 테스트 `npm test` · 원형 없음(기존 코드 있음)
+소스 범위  ["src/**", "lib/**"]
+           게이트 실측 — 안쪽 src/collector/channel.ts → allow(no-units)
+                        안쪽 lib/youtube/transcript.ts → allow(no-units)
+                        바깥 doc/README.md            → allow(not-source, drift.ignore)
+                        바깥 _trial/02-setup.txt      → allow(not-source, sourceGlobs 밖)
+면제 구역  없음 — vendor/·third_party/·@generated·CODEOWNERS 어느 근거도 못 찾았다
+설치됨     드리프트 훅 → .githooks/pre-commit · git config core.hooksPath .githooks
+남은 것    도구는 하나도 설치하지 않았다 (설치는 정책이라 승인 없이 안 한다)
+켜지 않은 층  CI — .github/workflows/drift-gate.yml.example (확장자 그대로) → 서버측 게이트 없음
+```
+
+## 만든 것
+
+`CLAUDE.md` · `README.md` · `workflow.config.json` · `doc/` 골격(`03.templates/` 16종 전부) · `.claude/settings.json` · `.claude/rules/` · `.gitignore` · `spike/` · `.githooks/pre-commit`. 기존 `src/`·`lib/`·`package.json`·`_trial/` 은 손대지 않았습니다.
+
+## 실행 키 실측
+
+| 키 | 값 | Exit |
+|:--|:--|:--|
+| `contract.gate` | `npx -y -p typescript tsc --noEmit --strict {file}` | **0** ✅ |
+| `build.command` | `npm run build` (`tsc -p .`) | **127** — `tsc` 없음 |
+| `test.command` | `npm test` (`vitest run`) | **127** — `vitest` 없음 |
+
+build·test 가 안 도는 것은 설정 오류가 아니라 프로젝트 상태입니다 — `node_modules/` 가 없고 `tsconfig.json` 도 없습니다. `package.json` 의 scripts 와 키가 일치하므로 값은 그대로 뒀습니다. `npm install` 후 `tsconfig.json` 을 만들면 그대로 돕니다.
+
+## 비운 것 — 왜 비웠나
+
+| 항목 | 왜 | 언제 채우나 |
+|:--|:--|:--|
+| `CLAUDE.md` 주요 도메인 | 코드에서 후보(channel·transcript·summary·digest)는 보이지만 **경계는 사람이 정하는 결정**이다 | `/flow:prd domain` |
+| `CLAUDE.md` Git 규약 (브랜치·커밋) | 커밋 이력이 `init` 하나뿐이라 규약을 못 읽는다 | 첫 `/flow:commit` |
+| `CLAUDE.md` MCP·도구 정책 · 추가 가드레일 | 코드에 없는 정책이다 | 필요할 때 |
+| `test.browser` | 프론트 코드가 없다(`routes.ts` 는 라우트 맵뿐). 템플릿 기본값 `playwright` 를 **근거 없이 남기지 않았다** | 화면이 생기면 |
+| `publish.target` | 템플릿 기본이 `notion` 이었으나 발행 대상은 결정이다 | `/flow:publish` |
+| `gate.legacyExempt` | 면제 근거가 하나도 없다. 기본은 면제 없음 | 막히면 `/flow:build` 가 제안 |
+| `theme.*` | 프론트 없음 | — |
+
+## 알아둘 것
+
+- **훅은 `git config` 로 걸었고 이 설정은 커밋되지 않습니다.** clone 한 사람은 `.githooks/pre-commit` 파일이 있어도 `git config core.hooksPath .githooks` 를 다시 돌려야 훅이 돕니다.
+- **유닛이 아직 없어 쓰기 게이트는 `no-units` 로 전부 통과합니다.** 첫 task 문서가 생기는 순간부터 File Map 밖 소스 쓰기가 막힙니다 — 그때 레거시 4개 파일에서 막히면 면제를 승인받아 넣으면 됩니다.
+- 도구 중 권할 것: TypeScript LSP (`/plugin install typescript-lsp@claude-plugins-official`, 사용자 설치) — 없어도 grep 으로 동작하지만 `/flow:build`·`/flow:review` 정확도가 떨어집니다.
+
+다음은 `/flow:prd domain` 또는 `/flow:next` 입니다.
