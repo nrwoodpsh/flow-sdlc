@@ -117,6 +117,21 @@ def shell_rules(root):
 
 # ── 렌더 ──
 
+def limit_rows(gr):
+    """`guard-rules.json` 의 `limits` — **한계의 유일한 정본**.
+
+    `{what, why}` 가 정상 형태다. 옛 문자열 형태도 받아 준다(왜는 `—`) — 형태 하나 때문에
+    한계가 표에서 사라지면 문서가 실제 방어보다 넓게 읽힌다. 그게 v1 의 병이다.
+    """
+    out = []
+    for x in gr.get('limits') or []:
+        if isinstance(x, dict):
+            out.append({'what': x.get('what', ''), 'why': x.get('why') or '—'})
+        else:
+            out.append({'what': str(x), 'why': '—'})
+    return out
+
+
 def _rule_rows(rules, classes, cid):
     out = []
     for r in rules:
@@ -169,10 +184,11 @@ def render_guard_table(root):
     L.append('')
     L.append('| 무엇 | 왜 |')
     L.append('|:--|:--|')
-    for x in sh_limits:
+    # **한 정본에서만 렌더한다.** 예전에는 셸 머리말의 `limit:` 과 JSON 의 `limits` 를 둘 다
+    # 실어서 겹치는 6개가 표에 두 번 나왔고, JSON 쪽 한 줄은 낡은 채(`rsync … 통과한다`)
+    # 남아 있었다. 정본을 JSON 하나로 모았으니 여기서도 하나만 읽는다.
+    for x in limit_rows(gr):
         L.append(f"| {cell(x['what'])} | {cell(x['why'])} |")
-    for x in gr.get('limits') or []:
-        L.append(f"| {cell(x)} | — |")
     L.append('')
     L.append('생성: `python3 scripts/gen_docs.py --write`')
     return '\n'.join(L)

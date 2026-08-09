@@ -695,9 +695,12 @@ def _shell_guard_header(ctx):
         if rid not in declared:
             r.fail(f"본문에만 있는 셸 규칙 `{rid}` — 머리말 `@flow-shell-rules` 에 없어서 "
                    f"문서 차단표에 실리지 않는다")
-    if not limits:
-        r.fail(f"머리말에 `limit:` 줄이 하나도 없다 — v1 은 목록에서 빠진 것을 "
-               f"한계로도 안 적어 문서가 실제 방어보다 넓게 읽혔다 (diag-C 3절)")
+    # 한계는 **여기 적지 않는다.** 정본은 `guard-rules.json` 의 `limits` 고,
+    # 겹침은 `limits-single-canon` 이 본다. 여기서는 셸에 남는 것만 막는다.
+    if limits:
+        r.fail(f"머리말에 `limit:` 줄이 {len(limits)}개 있다 — 한계의 정본은 "
+               f"`guard-rules.json` 의 `limits` 다. 여기 두면 정본이 둘이 되고 "
+               f"생성 표에 두 번 실린다 (실제로 6행이 겹치고 한 줄은 낡았다)")
     return r
 
 
@@ -1043,6 +1046,88 @@ def _skill_description_users(ctx):
                 r.fail(f"열거 누락 {ctx.rel(p)} — `/flow:{c}` 가 싣는데 description 에 없다 "
                        f"(부분 열거는 '이것만 쓴다'로 읽힌다 — 전부 적거나 등급을 "
                        f"`기본값` 으로 내린다)")
+    return r
+
+
+# ── limits 정본이 하나인가 ──
+# **이 프로젝트가 스스로 경계한 병이 limits 에서 재발했다.** 셸 머리말의 `limit:` 8줄과
+# `guard-rules.json` 의 `limits` 10개가 겹치는데 생성기가 둘 다 렌더해서, 사용자 문서의
+# `못 막는 것` 표에 같은 한계가 6행씩 두 번 실렸다. 게다가 겹친 쪽 한 줄은 **낡았다** —
+# `rsync` 를 잡게 고쳤는데 JSON 은 "rsync 는 통과한다"고 계속 적고 있었다.
+#
+# 왜 JSON 이 정본인가: `rule` 은 구현이 셸에 있어 본문의 `@rule` 표시와 대조되지만
+# `limit` 은 대조할 짝이 없다 — 셸에 두면 근접성만 얻고 보장은 못 얻으면서 정본이 둘이 된다.
+LIMIT_DUP_RATIO = 0.75
+
+
+# **무엇까지 잡나 — 넘겨 읽지 마라.**
+#   정본이 둘로 갈리는 것 → **구조로 막는다.** 셸 머리말에 `limit:` 이 있으면 문구와 무관하게 실패.
+#   한 정본 안의 중복    → 문자 유사도라 **복붙과 가벼운 손질까지**다.
+#     실측: `심볼릭 링크 우회`↔`심볼릭 링크로 우회하는 것` 은 잡고,
+#           `MCP 파일 도구`↔`다른 실행 경로 — python subprocess · MCP 도구` 는 **안 잡는다.**
+#     짧은 바꿔쓰기는 사람이 봐야 한다. 그걸 잡는다고 적지 않는다.
+@check('limits-single-canon', 'limits 정본이 하나인가',
+       '같은 한계가 두 정본에 갈려 생성 표에 두 번 실리고 한쪽이 낡는 것')
+def _limits_single_canon(ctx):
+    r = Result(unit='한계')
+    try:
+        import gen_docs
+    except Exception as e:
+        return broken(f"gen-docs 를 불러올 수 없다 — {type(e).__name__}: {e}")
+
+    gp = os.path.join(ctx.root, gen_docs.GUARD_RULES)
+    if not os.path.exists(gp):
+        return r
+    try:
+        gr = json.loads(ctx.read(gp))
+    except json.JSONDecodeError as e:
+        r.targets = 1
+        r.fail(f"guard-rules.json 파싱 실패 — {e}")
+        return r
+    rows = gen_docs.limit_rows(gr)
+    r.targets = len(rows)
+
+    if not rows:
+        r.fail("`guard-rules.json` 의 `limits` 가 비었다 — 못 막는 것을 안 적으면 "
+               "문서가 실제 방어보다 넓게 읽힌다 (diag-C 3절이 v1 에서 본 그 병이다)")
+
+    def norm(s):
+        # 서식·기호를 지운다. 같은 한계를 다르게 꾸며 적은 것을 같다고 보게 한다
+        return re.sub(r'[^가-힣a-zA-Z0-9]', '', re.sub(r'[`*]', '', str(s)))
+
+    # ① 셸 머리말에 limit 이 남았나 — 남았으면 그 텍스트가 JSON 과 겹치는지까지 짚어 준다
+    sh_limits = []
+    if os.path.exists(os.path.join(ctx.root, gen_docs.GUARD_SH)):
+        try:
+            _, _, sh_limits, _ = gen_docs.shell_rules(ctx.root)
+        except ValueError:
+            sh_limits = []          # 머리말 형식 오류는 shell-guard-header 가 본다
+    for s in sh_limits:
+        r.targets += 1
+        hit = next((x['what'] for x in rows
+                    if SequenceMatcher(None, norm(s['what']), norm(x['what'])).ratio()
+                    >= LIMIT_DUP_RATIO), None)
+        if hit:
+            r.fail(f"두 정본에 같은 한계 — 셸 머리말의 `{s['what'][:40]}` 가 "
+                   f"`guard-rules.json` 의 `{hit[:40]}` 와 겹친다 "
+                   f"(생성 표에 두 번 실린다. 셸 쪽을 지운다 — 정본은 JSON 이다)")
+        else:
+            r.fail(f"셸 머리말에 한계가 있다 — `{s['what'][:40]}` "
+                   f"(정본은 `guard-rules.json` 의 `limits` 다. 옮긴다)")
+
+    # ② 한 정본 안에서도 같은 것을 두 번 적었나
+    for i in range(len(rows)):
+        for j in range(i + 1, len(rows)):
+            a, b = rows[i]['what'], rows[j]['what']
+            if SequenceMatcher(None, norm(a), norm(b)).ratio() >= LIMIT_DUP_RATIO:
+                r.fail(f"limits 안에서 중복 — `{a[:40]}` ↔ `{b[:40]}` "
+                       f"(하나로 합친다)")
+
+    # ③ 왜가 비면 표의 한 열이 `—` 로 남는다. 한계는 **왜 못 막나**가 본문이다
+    for x in rows:
+        if x['why'] == '—':
+            r.fail(f"왜가 없다 — `{x['what'][:40]}` (`why` 를 적는다. "
+                   f"못 막는 이유가 없으면 고칠 수 있는지도 판단할 수 없다)")
     return r
 
 

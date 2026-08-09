@@ -68,7 +68,8 @@ def _guard_sh(declared, marked):
     head = ['#!/usr/bin/env bash', '# @flow-shell-rules v1']
     for rid in declared:
         head.append(f"# rule: {rid} | block | 무엇을 막나 {rid} | 왜 셸에 있나 {rid}")
-    head.append('# limit: MCP 파일 도구 | matcher 가 도구 이름이라 훅이 안 돈다')
+    # `limit:` 은 넣지 않는다 — 한계의 정본은 `guard-rules.json` 이고
+    # 머리말에 두면 `limits-single-canon` 이 정본 둘로 잡는다.
     head.append('# @flow-shell-rules-end')
     body = ['', 'set -uo pipefail', '']
     for rid in marked:
@@ -210,6 +211,30 @@ def _graded(grade, desc, loads_skills=('traceability',)):
     }
 
 
+def _limits(shell_dup):
+    """한계 둘 — JSON 이 정본. `shell_dup=True` 면 셸 머리말이 같은 것을 또 적는다."""
+    dup = "MCP 파일 도구 | matcher 가 도구 이름이라 훅이 아예 안 돈다"
+    head = ['#!/usr/bin/env bash', '# @flow-shell-rules v1',
+            "# rule: a-rule | block | 무엇을 막나 | 왜 셸에 있나"]
+    if shell_dup:
+        head.append(f"# limit: {dup}")
+    head.append('# @flow-shell-rules-end')
+    return {
+        gen_docs.GUARD_RULES: json.dumps({
+            'classes': {'irreversible': {'level': 'block', '뜻': '되돌릴 수 없다'}},
+            'rules': [{'id': 'git-push', 'tool': 'git', 'words': 'push',
+                       'class': 'irreversible', 'level': 'block', 'label': 'git push',
+                       'why': '원격 이력이 바뀐다.'}],
+            'limits': [
+                {'what': 'MCP 파일 도구', 'why': 'matcher 가 도구 이름이라 훅이 아예 안 돈다'},
+                {'what': '사람 터미널 — Sourcetree · IDE',
+                 'why': '훅은 Claude Code 세션에만 걸린다'},
+            ],
+        }, ensure_ascii=False, indent=2),
+        gen_docs.GUARD_SH: '\n'.join(head + ['', '# @rule a-rule', 'true']) + '\n',
+    }
+
+
 def _wired(enforced):
     """`machine` 등급 하나 + 그걸 강제한다는 훅. `enforced=False` 면 배선 증명이 없다."""
     item = {'id': 'unit-task-doc', 'what': '소스를 담은 task 문서가 있다'}
@@ -319,6 +344,13 @@ CASES = {
                                'who': 'gatekeeper'}]),
          **_cmd_md([('스킬', '없다')],
                    tail="- **내용** — 계약을 따랐는지 이 커맨드가 확인한다.\n\n")},
+    ),
+
+    # ── limits 정본이 하나인가 ──
+    'limits-single-canon': (
+        _limits(shell_dup=False),
+        # 같은 한계를 셸 머리말에도 적었다 = 정본이 둘 → 생성 표에 두 번 실린다
+        _limits(shell_dup=True),
     ),
 
     # ── `machine` 등급 ↔ 실제 훅 배선 ──

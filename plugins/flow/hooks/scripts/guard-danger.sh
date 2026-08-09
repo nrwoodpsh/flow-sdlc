@@ -31,21 +31,18 @@
 # 갈라진 정본 중 셸 쪽이 낡는 것이 diag-C 4절이 말한 그 병이라, 그 병만 기계로 막는다.
 #
 # 형식 — 줄 하나에 필드를 ` | ` 로 잇는다. 필드 수가 다르면 lint 가 실패한다.
-#   `# rule:  <id> | <등급> | <무엇을 막나> | <왜 JSON 이 아니라 셸에 있나>`
-#   `# limit: <못 막는 것> | <왜>`
+#   `# rule: <id> | <등급> | <무엇을 막나> | <왜 JSON 이 아니라 셸에 있나>`
+#
+# **`limit:` 줄을 여기 넣지 마라. 한계의 정본은 `guard-rules.json` 의 `limits` 다.**
+# 한때 여기에도 8줄이 있었고, 겹친 6개가 생성 표에 두 번 실렸으며 그중 하나(`rsync`)는
+# 낡은 채 남았다 — rsync 를 잡게 고쳤는데 문서는 통과한다고 적고 있었다.
+# `rule` 은 구현이 이 파일에 있어 본문의 `@rule` 표시와 대조되지만, `limit` 은 대조할 짝이 없다.
+# 근접성만 얻고 보장은 못 얻으면서 정본이 둘이 된다. `lint.py` 의 `limits-single-canon` 이 막는다.
 #
 # @flow-shell-rules v1
 # rule: bash-write-redirect | block | 리다이렉션으로 소스 파일에 쓰는 것 — `>` · `>>` · noclobber 무시 형태 | 리다이렉션 대상은 토크나이저가 세그먼트 경계로 써서 버린다 — 명령 이름 목록으로 표현할 수 없다
 # rule: bash-write-command | block | 파일을 만드는 명령으로 소스를 쓰는 것 — tee · sed -i · gsed -i · perl -i · cp · mv · ln · install · truncate · rsync · dd(of=) | 어느 인자가 파일인지가 명령마다 달라(전부/마지막/of=) 인자 해석이 필요하다
 # rule: word-split-quotes | block | 낱말 안에 인용을 끼워 명령을 쪼개는 것 — `git p"u"sh` · `gh "pr" merge` | 셸의 단어 분리 규칙(인용은 단어 경계가 아니다)을 구현해야 판정된다. 목록으로 표현할 수 없다
-# limit: `python -c "open('src/a.ts','w')"` · node -e · awk 의 `print > f` | 경로가 코드 안에 있어 셸이 알 수 없다
-# limit: 목록에 없는 파일 생성 명령 — curl -o · wget -O · patch · xargs 로 감싼 것 | 셸을 해석하지 않고 이름으로 판정하므로 목록 밖은 통과한다. 한 줄 더하면 잡힌다
-# limit: 대상이 디렉터리인 복사 — `cp a b dir/` | 그 안에 만들 파일 이름을 알 수 없다
-# limit: 심볼릭 링크 우회 | 게이트는 경로 문자열만 정규화하고 realpath 는 안 쓴다 (링크가 정상인 자리가 있다)
-# limit: ANSI-C 인용 — `git $'p\x75sh'` | 낱말은 제대로 나누지만 `\x75` 같은 이스케이프를 값으로 풀지 않는다. 풀려면 셸의 인용 해석기를 다 구현해야 한다
-# limit: `eval` · 변수로 쪼갠 경로 · 스크립트 파일에 써서 실행 · 별칭 | 셸을 해석해야 한다. 훅이 할 일이 아니다
-# limit: MCP 파일 도구 | matcher 가 도구 이름이라 훅이 아예 안 돈다
-# limit: 사람이 편집기로 고치는 것 | 훅은 Claude Code 세션에만 걸린다
 # @flow-shell-rules-end
 #
 # 위 둘은 **스스로 판정하지 않는다.** 쓰기 대상 경로를 뽑아 `gate-source-write.sh` 에 물어본다 —
