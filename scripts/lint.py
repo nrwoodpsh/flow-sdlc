@@ -755,8 +755,12 @@ def _manifest_parity(ctx):
 # ── topology 의 '빈 것'과 '없는 것' ──
 # 다른 층이 아직 안 채운 키를 `null` 로 두는 것과 키가 아예 없는 것은 다르다.
 # 구별할 장치가 없으면 '아직'과 '까먹음'이 같아 보인다 — 그래서 pending 목록과 대조한다.
-TOPO_CMD_KEYS = ('order', 'phase', 'after', 'next', 'entry', 'loads', 'procedures')
+TOPO_CMD_KEYS = ('order', 'phase', 'after', 'next', 'entry', 'exit', 'loads', 'procedures')
 TOPO_ENTRY_KEYS = ('machine', 'content', 'promise')
+# `exit` 는 `content` 만이다. `machine` 은 훅이 도구 호출마다 보는 것이라 판정 시점이 도구
+# 호출이고, `promise` 는 판정하는 자가 없는 상시 규칙이라 시점이 없다 — 없는 시점을 적으라
+# 요구하면 빈 껍데기가 늘고, 그 껍데기가 다시 '적혀 있으니 있는 것'으로 읽힌다.
+TOPO_EXIT_KEYS = ('content',)
 
 
 @check('topology-pending', 'topology 빈 키 ↔ pending 목록',
@@ -798,14 +802,21 @@ def _topology_pending(ctx):
             elif c[k] is None and not allowed(dotted):
                 r.fail(f"`null` 인데 pending 에 없다 — {dotted} "
                        f"(채우거나 pending 에 적는다)")
-        e = c.get('entry')
-        if isinstance(e, dict):
-            for k in TOPO_ENTRY_KEYS:
-                if k not in e:
-                    r.fail(f"진입 조건 등급이 빠졌다 — commands.{name}.entry.{k} "
-                           f"(없는 등급은 빈 배열로 적는다. 등급을 섞지 않는 것이 이 파일의 일이다)")
-        elif 'entry' in c:
-            r.fail(f"commands.{name}.entry 가 객체가 아니다")
+        for slot, keys, lab in (('entry', TOPO_ENTRY_KEYS, '진입'),
+                                ('exit', TOPO_EXIT_KEYS, '퇴장')):
+            s = c.get(slot)
+            if isinstance(s, dict):
+                for k in keys:
+                    if k not in s:
+                        r.fail(f"{lab} 조건 등급이 빠졌다 — commands.{name}.{slot}.{k} "
+                               f"(없는 등급은 빈 배열로 적는다. 등급을 섞지 않는 것이 "
+                               f"이 파일의 일이다)")
+                for k in s:
+                    if k not in keys and not k.startswith('$'):
+                        r.fail(f"{lab} 조건에 없는 등급 — commands.{name}.{slot}.{k} "
+                               f"(쓸 수 있는 것은 {' · '.join(keys)} 뿐이다)")
+            elif slot in c:
+                r.fail(f"commands.{name}.{slot} 이 객체가 아니다")
 
     # pending 이 가리키는 자리가 실제로 있나 — 낡은 pending 은 '아직'을 영구히 정당화한다
     for pat in pending:
@@ -935,12 +946,26 @@ def _command_loads_parity(ctx):
     return r
 
 
+# ── 내용 조건을 두 시점에서 모은다 ──
+# **`entry.content` 만 보면 안 된다.** 내용 조건 5개는 전부 퇴장 조건이라 `exit.content` 로
+# 내려갔다(재설계 D5·T4). 여기를 `entry` 로만 두면 아래 검사들이 **대상 0건으로 조용히
+# 통과한다** — 그게 v1 이 앓던 사문화다. 두 자리를 union 으로 본다.
+def _content_items(c):
+    """[(시점, 항목)] — 시점은 'entry' 또는 'exit'."""
+    out = []
+    for slot in ('entry', 'exit'):
+        for item in ((c or {}).get(slot) or {}).get('content') or []:
+            out.append((slot, item))
+    return out
+
+
 # ── gatekeeper 위임 지시가 있나 ──
 # v1 최대 결함 — 게이트를 4곳이 약속하고 실제로 거는 곳은 하나였다(diag-A 4절).
-# `entry.content` 는 **gatekeeper 가 판정하는 등급**이다. 그런데 부르는 것 자체는 약속이라
-# 기계가 못 막는다. 막을 수 있는 것은 **부르라는 지시가 본문에 있나** 까지다.
+# 내용 조건은 **gatekeeper 가 판정하는 등급**이다. 그런데 부르는 것 자체는 약속이라
+# 기계가 못 막는다. 막을 수 있는 것은 **부르라는 지시가 본문에 있나** 와
+# **그 지시가 어느 항목을 넘기는지 id 로 적나** 까지다.
 #
-# `entry.content` 가 빈 커맨드에는 걸지 않는다 — 부를 것이 없는 게 정상이고,
+# 내용 조건이 빈 커맨드에는 걸지 않는다 — 부를 것이 없는 게 정상이고,
 # 없는 것을 요구하면 커맨드가 게이트를 발명하게 된다.
 GK_CALL = re.compile(r'gatekeeper`?\s*(?:에이전트)?\s*(?:에|에게|를|을)?\s*'
                      r'[^\n]{0,30}?(?:부른다|넘긴다|위임)')
@@ -954,18 +979,50 @@ def _gatekeeper_delegation(ctx):
     if not t:
         return r
     for name, c in (t.get('commands') or {}).items():
-        content = ((c or {}).get('entry') or {}).get('content') or []
-        if not content:
+        items = _content_items(c)
+        if not items:
             continue                       # 부를 것이 없다 — 대상이 아니다
         p = os.path.join(ctx.root, f'plugins/flow/commands/{name}.md')
         if not os.path.isfile(p):
             continue
         r.targets += 1
         if not GK_CALL.search(ctx.read(p)):
-            ids = ', '.join(str(x.get('id')) for x in content if isinstance(x, dict))
-            r.fail(f"위임 지시 없음 {ctx.rel(p)} — `entry.content`({ids}) 가 있는데 "
+            ids = ', '.join(str((x or {}).get('id')) for _, x in items)
+            r.fail(f"위임 지시 없음 {ctx.rel(p)} — 내용 조건({ids})이 있는데 "
                    f"`gatekeeper` 를 부르라는 지시가 본문에 없다 "
                    f"(약속만 남으면 게이트가 이름만 있는 것이다)")
+    return r
+
+
+# ── 위임 지시가 어느 항목을 넘기는지 적나 ──
+# `gatekeeper-delegation` 은 **부르라는 지시가 있나** 까지다. 그것만 보면 *"gatekeeper 에
+# 넘긴다"* 한 줄로 통과하고, **무엇을 넘길지는 넘기는 쪽이 그때 정하게 된다** — 그러면
+# 판정 기준의 정본이 데이터가 아니라 그 순간의 판단이다. `gatekeeper.md` 는 스스로
+# *"기준을 발명하지 않는다. 무엇을 볼지는 위임 지시가 준다"* 라고 적는다.
+#
+# **검사를 가른 이유** — 한 id 에 두 규칙을 묶으면 위반 픽스처가 하나만 건드려도 통과라
+# 나머지가 사문화돼도 테스트가 못 잡는다(T1 이 검사를 넷으로 가른 것과 같은 이유다).
+@check('gate-item-named', '위임 지시 ↔ 내용 조건 id',
+       '무엇을 넘기는지 적지 않아 판정 기준이 데이터에서 오지 않는 것')
+def _gate_item_named(ctx):
+    r = Result(unit='내용 조건')
+    t = _topo(ctx)
+    if not t:
+        return r
+    for name, c in (t.get('commands') or {}).items():
+        p = os.path.join(ctx.root, f'plugins/flow/commands/{name}.md')
+        if not os.path.isfile(p):
+            continue
+        text = None
+        for _, item in _content_items(c):
+            r.targets += 1
+            if text is None:
+                text = ctx.read(p)
+            iid = str((item or {}).get('id'))
+            if iid not in text:
+                r.fail(f"항목을 안 적었다 {ctx.rel(p)} — `{iid}` 를 `gatekeeper` 에 "
+                       f"넘긴다고 topology 가 적는데 본문에 그 id 가 없다 "
+                       f"(무엇을 넘기는지 본문이 지목해야 판정 기준이 데이터에서 온다)")
     return r
 
 
@@ -1000,7 +1057,7 @@ def _agent_tools(ctx):
     return out
 
 
-@check('gate-judge-independence', 'entry.content 판정자 ↔ 진행하는 쪽',
+@check('gate-judge-independence', '내용 조건 판정자 ↔ 진행하는 쪽',
        '발견을 만든 쪽이 자기 발견을 판정하는 것 (재설계 D3 · 능력 2 · 자기 검증 금지)')
 def _gate_judge_independence(ctx):
     r = Result(unit='내용 조건')
@@ -1025,20 +1082,77 @@ def _gate_judge_independence(ctx):
                    f"판정자 선언을 지우거나 도구를 뗀다)")
 
     for name, c in (t.get('commands') or {}).items():
-        for item in ((c or {}).get('entry') or {}).get('content') or []:
+        for slot, item in _content_items(c):
             r.targets += 1
             iid = (item or {}).get('id')
             who = (item or {}).get('who')
             if not who:
-                r.fail(f"판정자 없음 — commands.{name}.entry.content `{iid}` 에 `who` 가 없다 "
+                r.fail(f"판정자 없음 — commands.{name}.{slot}.content `{iid}` 에 `who` 가 없다 "
                        f"(안 적으면 진행하는 커맨드가 자기 조건을 판정한다 = 게이트가 없다)")
             elif who not in tools:
-                r.fail(f"없는 판정자 — commands.{name}.entry.content `{iid}` 의 "
+                r.fail(f"없는 판정자 — commands.{name}.{slot}.content `{iid}` 의 "
                        f"`who: {who}` 에이전트가 없다")
             elif who not in judges:
-                r.fail(f"판정 독립성 위반 — commands.{name}.entry.content `{iid}` 의 판정자가 "
+                r.fail(f"판정 독립성 위반 — commands.{name}.{slot}.content `{iid}` 의 판정자가 "
                        f"`{who}` 다. 그 국면을 진행하는 쪽이라 자기 산출을 자기가 판정한다 "
                        f"(판정자 정본은 `grades.content.judges` — 늘리려면 도구 권한으로 증명한다)")
+    return r
+
+
+# ── 내용 조건의 시점이 성립하나 ──
+# **재설계 D5 가 여기다.** 내용 조건 5개가 전부 `entry.content` 에 있었는데 내용은 퇴장
+# 조건이었다 — `contract-followed`(구현을 해 봐야 안다) · `coverage-gap`(감사 결과 자체) ·
+# `requirement-covered`(설계를 해 봐야 안다). 진입 시점에는 판정할 대상이 없으니
+# `next` 의 전환 게이트가 원리상 판정 불가였다. 이름은 있고 아무도 판정할 수 없는 상태 —
+# v1 의 *"게이트를 약속만 하고 아무도 안 부르는 것"* 의 변형이다.
+#
+# **기계가 볼 수 있는 것은 시점의 근거다.** 무엇이 언제 존재하는지는 못 읽지만,
+# *"이 조건이 판정하는 대상을 누가 만들었나"* 는 데이터로 적히면 대조할 수 있다.
+#
+#   entry — `producedBy` 에 **앞 커맨드**를 적어야 한다. 그 커맨드가 `after` 안에 있어야
+#           하고 자기 자신이면 안 된다. 못 적으면 그것은 자기가 만들 것을 판정하는 것,
+#           즉 퇴장 조건이다.
+#   exit  — 자기 산출을 판정하는 자리다. `producedBy` 를 적으면 자리가 틀렸다.
+#
+# **한계** — entry 쪽 규칙은 지금 repo 에서 대상이 0이다(내용 조건 5개가 전부 exit 로 갔다).
+# 그 가지는 `lint.test.py` 의 위반 픽스처만 밟는다. 검사 전체의 대상은 exit 5건이라
+# 0건은 아니지만, **entry 가지는 픽스처로만 살아 있다**는 것을 여기 적어 둔다.
+@check('gate-timing', '내용 조건의 시점 ↔ 판정 대상',
+       '진입에서 판정할 대상이 없는 조건을 진입이라 적는 것 (재설계 D5)')
+def _gate_timing(ctx):
+    r = Result(unit='내용 조건')
+    t = _topo(ctx)
+    if not t:
+        return r
+    cmds = t.get('commands') or {}
+    for name, c in cmds.items():
+        after = [str(x) for x in ((c or {}).get('after') or [])]
+        for slot, item in _content_items(c):
+            r.targets += 1
+            iid = (item or {}).get('id')
+            made = (item or {}).get('producedBy')
+            if slot == 'exit':
+                if made:
+                    r.fail(f"퇴장 조건에 `producedBy` — commands.{name}.exit.content "
+                           f"`{iid}` 는 이 커맨드가 만든 것을 판정하는 자리다. 앞 커맨드가 "
+                           f"만든 것을 판정한다면 `entry.content` 로 올린다")
+                continue
+            if not made:
+                r.fail(f"진입에서 판정할 대상이 없다 — commands.{name}.entry.content "
+                       f"`{iid}` 에 `producedBy` 가 없다. 시작할 때 무엇을 보고 판정하나 "
+                       f"— 그 대상을 만든 앞 커맨드를 적는다. 못 적으면 이 커맨드가 만들 것을 "
+                       f"판정하는 것이고, 그것은 `exit.content` 다 (D5)")
+            elif made == name:
+                r.fail(f"자기가 만든 것을 진입에서 판정한다 — commands.{name}.entry.content "
+                       f"`{iid}` 의 `producedBy` 가 자기 자신이다 (`exit.content` 로 내린다)")
+            elif made not in cmds:
+                r.fail(f"없는 커맨드 — commands.{name}.entry.content `{iid}` 의 "
+                       f"`producedBy: {made}` 가 위상에 없다")
+            elif made not in after:
+                r.fail(f"앞 커맨드가 아니다 — commands.{name}.entry.content `{iid}` 는 "
+                       f"`{made}` 가 만든 것을 본다는데 `{made}` 가 `commands.{name}.after` "
+                       f"({', '.join(after) or '없음'})에 없다. 오지 않는 국면의 산출은 "
+                       f"진입 시점에 없다")
     return r
 
 
@@ -1456,23 +1570,107 @@ def _machine_gate_wired(ctx):
     return r
 
 
-# ── 커맨드가 표시하는 등급 ↔ topology 등급 ──
-# 진입 조건 절은 손으로 쓴다(생성물이 아니다). 그래서 topology 에서 등급을 내려도 본문은
+# ── 커맨드가 표시하는 등급·시점 ↔ topology ──
+# 게이트 절은 손으로 쓴다(생성물이 아니다). 그래서 topology 에서 등급을 내려도 본문은
 # 그대로 남는다 — H1 이 정확히 그 상태였다(5곳이 "기계"라 적혔는데 훅은 안 봄).
 #
 # **표와 불릿 두 형식을 다 본다.** 한 형식만 보면 다른 형식이 탈출구가 된다 —
 # 실제로 표만 보게 짰더니 `verify`·`sync` 의 불릿 거짓 표시가 그대로 통과했다.
+#
+# **`내용` 에는 시점을 함께 적는다** — `내용 · 진입` 또는 `내용 · 퇴장`. D5 는 데이터만의
+# 결함이 아니었다: 본문도 퇴장 조건을 진입 절에 적어 두었고, **사용자는 본문을 읽는다.**
+# 시점을 안 적으면 읽는 쪽은 시작할 때 판정하는 것으로 읽는다.
+# `기계`·`약속` 에는 붙이지 않는다 — 훅은 도구 호출마다 보고 약속은 판정 시점이 없다.
 GRADE_LABEL = {'machine': '기계', 'content': '내용', 'promise': '약속'}
 LABEL_GRADE = {v: k for k, v in GRADE_LABEL.items()}
+WHEN_LABEL = {'entry': '진입', 'exit': '퇴장'}
+LABEL_WHEN = {v: k for k, v in WHEN_LABEL.items()}
 GATE_HEAD = re.compile(r'^##+\s+(?:게이트|진입 조건)')
-GRADE_BULLET = re.compile(r'^\s*[-*]\s*\*\*(기계|내용|약속)\*\*')
+GRADE_TXT = r'(기계|내용|약속)(?:\s*·\s*(진입|퇴장))?'
+GRADE_BULLET = re.compile(r'^\s*[-*]\s*\*\*' + GRADE_TXT + r'\*\*')
 # **`없다` 는 구분자 바로 뒤에 올 때만 '없다는 선언'이다.** 문장 아무 데서나 찾으면
 # `…판정 독립성이 없다` 같은 서술이 선언으로 읽힌다(실제로 build 가 그렇게 오판됐다).
-GRADE_NONE = re.compile(r'^\s*[-*]\s*\*\*(?:기계|내용|약속)\*\*\s*[—–-]\s*없다')
+GRADE_NONE = re.compile(r'^\s*[-*]\s*\*\*' + GRADE_TXT + r'\*\*\s*[—–-]\s*없다')
 
 
-@check('entry-grade-parity', '커맨드 등급 표시 ↔ topology',
-       '등급을 내려도 커맨드 본문에 기계로 남는 것 (최종 검증 H1)')
+def _slot_grades(c):
+    """(등급, 시점) → 그 자리의 항목 수. 시점은 `content` 에만 있다(다른 등급은 None)."""
+    out = {}
+    for g in ('machine', 'promise'):
+        n = len((c.get('entry') or {}).get(g) or [])
+        if n:
+            out[(g, None)] = n
+    for slot in ('entry', 'exit'):
+        n = len((c.get(slot) or {}).get('content') or [])
+        if n:
+            out[('content', slot)] = n
+    return out
+
+
+def _show(g, when):
+    return GRADE_LABEL[g] + (f" · {WHEN_LABEL[when]}" if when else '')
+
+
+def _gate_labels(ctx, p):
+    """게이트 절의 등급 라벨 — [(등급, 시점 또는 None, 없다는 선언인가)] · 절이 없으면 None."""
+    L = ctx.lines(p)
+    fenced = fenced_map(L)
+    start = next((i for i, l in enumerate(L)
+                  if not fenced[i] and GATE_HEAD.match(l)), None)
+    if start is None:
+        return None
+    end = next((i for i in range(start + 1, len(L))
+                if not fenced[i] and L[i].startswith('## ')), len(L))
+    out = []
+    for i in range(start, end):
+        if fenced[i]:
+            continue
+        l = L[i]
+        m = GRADE_BULLET.match(l)
+        if m:
+            out.append((LABEL_GRADE[m.group(1)], LABEL_WHEN.get(m.group(2) or ''),
+                        bool(GRADE_NONE.match(l))))
+            continue
+        if l.startswith('|') and not SEP.match(l):
+            first = re.sub(r'[`*]', '', l.strip('|').split('|')[0]).strip()
+            cm = re.fullmatch(GRADE_TXT, first)
+            if cm:
+                out.append((LABEL_GRADE[cm.group(1)], LABEL_WHEN.get(cm.group(2) or ''),
+                            False))
+    return out
+
+
+# ── 본문이 내용 조건의 시점을 적나 ──
+# **D5 는 데이터만의 결함이 아니었다.** 커맨드 본문도 퇴장 조건을 `진입 조건` 절에 적어
+# 두었고, **사용자는 데이터가 아니라 본문을 읽는다.** 시점을 안 적으면 읽는 쪽은 시작할 때
+# 판정하는 것으로 읽는다 — `machine` 이 아닌 것을 `기계` 라 적던 H1 과 같은 종류의 거짓이다.
+#
+# `기계`·`약속` 에는 붙이지 않는다 — 훅은 도구 호출마다 보고, 약속은 판정하는 자가 없어
+# 시점이 없다. 없는 시점을 적는 것도 거짓 표시다.
+#
+# **`entry-grade-parity` 와 가른 이유** — 한 id 에 묶으면 위반 픽스처가 한 규칙만 건드려도
+# 통과라 나머지가 사문화돼도 테스트가 못 잡는다(T1 이 검사를 넷으로 가른 것과 같은 이유).
+@check('gate-timing-shown', '본문의 내용 조건 시점 표시',
+       '퇴장 조건을 시점 없이 적어 시작할 때 판정하는 것으로 읽히는 것 (D5)')
+def _gate_timing_shown(ctx):
+    r = Result(unit='등급 표시')
+    for p in ctx.commands():
+        labels = _gate_labels(ctx, p)
+        for g, w, is_none in labels or []:
+            r.targets += 1
+            if g == 'content' and not w and not is_none:
+                r.fail(f"시점 표시 없음 {ctx.rel(p)} — `내용` 을 적었는데 `진입`·`퇴장` "
+                       f"어느 쪽인지 없다 (`내용 · 퇴장` 처럼 적는다. 안 적으면 읽는 쪽은 "
+                       f"시작할 때 판정하는 것으로 읽는다 — D5 가 그 자리다)")
+            elif g != 'content' and w:
+                r.fail(f"시점을 붙일 수 없는 등급 {ctx.rel(p)} — "
+                       f"`{GRADE_LABEL[g]} · {WHEN_LABEL[w]}` 이라 적었다. 훅은 도구 호출마다 "
+                       f"보고 약속은 판정 시점이 없다 — 시점은 `내용` 에만 붙인다")
+    return r
+
+
+@check('entry-grade-parity', '커맨드 등급·시점 표시 ↔ topology',
+       '등급을 내려도 커맨드 본문에 기계로 남는 것 · 퇴장 조건을 진입이라 적는 것 (H1 · D5)')
 def _entry_grade_parity(ctx):
     r = Result(unit='커맨드')
     tp = os.path.join(ctx.root, 'plugins/flow/flow.topology.json')
@@ -1489,55 +1687,48 @@ def _entry_grade_parity(ctx):
         c = cmds.get(name)
         if not c:
             continue
-        entry = c.get('entry') or {}
-        actual = {GRADE_LABEL[g] for g in ('machine', 'content', 'promise')
-                  if (entry.get(g) or [])}
-
-        L = ctx.lines(p)
-        fenced = fenced_map(L)
-        start = next((i for i, l in enumerate(L)
-                      if not fenced[i] and GATE_HEAD.match(l)), None)
-        if start is None:
+        actual = _slot_grades(c)
+        labels = _gate_labels(ctx, p)
+        if labels is None:
             # 기계라고 데이터에 적었으면 **보여 줘야** 한다. 절을 지워서 대조를 피하는 길을 막는다.
-            if entry.get('machine'):
+            if (c.get('entry') or {}).get('machine'):
                 r.targets += 1
                 r.fail(f"게이트 절 없음 {ctx.rel(p)} — topology 는 `entry.machine` 이 "
-                       f"{len(entry['machine'])}개라고 적는데 본문에 진입 조건 절이 없다 "
+                       f"{len(c['entry']['machine'])}개라고 적는데 본문에 게이트 절이 없다 "
                        f"(기계로 막히는 것은 사용자에게 보여야 한다)")
             continue
-        end = next((i for i in range(start + 1, len(L))
-                    if not fenced[i] and L[i].startswith('## ')), len(L))
         r.targets += 1
 
         claimed, denied = set(), set()
-        for i in range(start, end):
-            if fenced[i]:
+        for g, w, is_none in labels:
+            if g == 'content' and not w:
+                # 시점을 안 적은 라벨 — 그 흠은 `gate-timing-shown` 이 잡는다.
+                # 여기서는 **등급이 있나 없나** 만 본다: `- **내용** — 없다` 는 두 시점 다
+                # 없다는 선언이고, 그냥 `내용` 은 데이터에 있는 시점을 가리킨 것으로 읽는다.
+                # 데이터에 아무 내용 조건도 없으면 거짓 표시로 떨어진다.
+                if is_none:
+                    denied.update({('content', 'entry'), ('content', 'exit')})
+                    continue
+                present = [x for x in ('entry', 'exit') if ('content', x) in actual]
+                claimed.update({('content', x) for x in present} or {('content', None)})
                 continue
-            l = L[i]
-            m = GRADE_BULLET.match(l)
-            if m:
-                lab = m.group(1)
-                # `- **내용** — 없다.` 는 **없다는 선언**이다. 있다고 세면 안 된다
-                (denied if GRADE_NONE.match(l) else claimed).add(lab)
-                continue
-            if l.startswith('|') and not SEP.match(l):
-                first = re.sub(r'[`*]', '', l.strip('|').split('|')[0]).strip()
-                if first in LABEL_GRADE:
-                    claimed.add(first)
+            (denied if is_none else claimed).add((g, w))
 
-        for lab in sorted(claimed - actual):
-            g = LABEL_GRADE[lab]
-            r.fail(f"거짓 등급 표시 {ctx.rel(p)} — 본문은 `{lab}` 이라 적는데 topology 의 "
-                   f"`entry.{g}` 가 비었다 (아무도 판정하지 않는 것을 판정한다고 적는 것이 "
-                   f"v1 의 병이다 — 내렸으면 본문도 내린다)")
-        for lab in sorted(actual - claimed - denied):
-            g = LABEL_GRADE[lab]
-            r.fail(f"등급 누락 {ctx.rel(p)} — topology 의 `entry.{g}` 에 "
-                   f"{len(entry[g])}개가 있는데 본문이 `{lab}` 을 안 적는다")
-        for lab in sorted(denied & actual):
-            g = LABEL_GRADE[lab]
-            r.fail(f"없다고 적었는데 있다 {ctx.rel(p)} — 본문은 `{lab}` 이 없다고 적는데 "
-                   f"topology 의 `entry.{g}` 에 {len(entry[g])}개가 있다")
+        _k = lambda x: (x[0], x[1] or '')      # None 과 str 을 비교하면 TypeError 다
+        for key in sorted(claimed - set(actual), key=_k):
+            g, w = key
+            dotted = f"{w or 'entry'}.{g}"
+            r.fail(f"거짓 등급 표시 {ctx.rel(p)} — 본문은 `{_show(g, w)}` 이라 적는데 "
+                   f"topology 의 `{dotted}` 가 비었다 (아무도 판정하지 않는 것을 판정한다고 "
+                   f"적는 것이 v1 의 병이다 — 내렸거나 시점을 옮겼으면 본문도 따라간다)")
+        for key in sorted(set(actual) - claimed - denied, key=_k):
+            g, w = key
+            r.fail(f"등급 누락 {ctx.rel(p)} — topology 의 `{w or 'entry'}.{g}` 에 "
+                   f"{actual[key]}개가 있는데 본문이 `{_show(g, w)}` 을 안 적는다")
+        for key in sorted(denied & set(actual), key=_k):
+            g, w = key
+            r.fail(f"없다고 적었는데 있다 {ctx.rel(p)} — 본문은 `{_show(g, w)}` 이 없다고 "
+                   f"적는데 topology 의 `{w or 'entry'}.{g}` 에 {actual[key]}개가 있다")
     return r
 
 

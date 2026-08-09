@@ -1,14 +1,26 @@
 {
   "$note": [
-    "파이프라인 위상 · 진입 조건 · 게이트 면제의 **정본**이다.",
+    "파이프라인 위상 · 게이트 조건(진입·퇴장) · 게이트 면제의 **정본**이다.",
     "  gate-source-write.sh   `gate` 절을 읽어 판정한다 (PreToolUse Write|Edit)",
     "  guard-danger.sh        Bash 경유 쓰기를 잡으면 같은 게이트에 물어본다",
     "  commands/*.md 의 연결 절 · next 체인표 · plugin.json description  (생성 — 아직 안 함)",
     "",
-    "**등급을 섞지 않는다.** 진입 조건은 무엇이 판정하나로 셋으로 갈린다 —",
+    "**등급을 섞지 않는다.** 게이트 조건은 무엇이 판정하나로 셋으로 갈린다 —",
     "`machine`(훅이 판정) · `content`(gatekeeper 가 판정) · `promise`(아무 기계도 없다).",
     "v1 최대 결함이 '게이트를 4곳이 약속하고 실제로 거는 곳은 하나'였다(diag-A 4절).",
-    "약속을 약속이라고 적는 것이 이 파일의 일이다."
+    "약속을 약속이라고 적는 것이 이 파일의 일이다.",
+    "",
+    "**진입과 퇴장을 가른다.** `entry` 는 그 커맨드가 **시작할 때 이미 있는 것**으로 판정하고,",
+    "`exit` 는 **끝낼 때 그 커맨드가 만든 것**으로 판정한다. 내용 조건 5개가 전부 `entry` 에",
+    "있었는데 실은 퇴장 조건이라(재설계 D5) 진입 시점에는 판정할 대상이 없었고, `next` 의 전환",
+    "게이트가 원리상 판정 불가였다.",
+    "**`entry.content` 를 새로 적으려면 `producedBy` 에 그 대상을 만든 앞 커맨드를 적어야 한다**",
+    "(그 커맨드가 `after` 안에 있어야 한다). 못 적으면 그것은 진입 조건이 아니라 퇴장 조건이다 —",
+    "`lint.py` 의 `gate-timing` 이 대조한다.",
+    "",
+    "**시점 축은 `content` 에만 있다.** `machine` 은 훅이 도구 호출마다 보는 것이라 판정 시점이",
+    "도구 호출이고, `promise` 는 판정하는 자가 없는 상시 규칙이라 시점이 없다. 없는 시점을",
+    "적으면 그것이 또 하나의 거짓 표시다."
   ],
   "version": 1,
   "pending": [],
@@ -40,12 +52,12 @@
     "content": {
       "누가 판정하나": "gatekeeper 에이전트 — 진행하는 쪽이 아니다",
       "무엇을 판정할 수 있나": "내용 충족 여부. 룰로 못 접는 것",
-      "우회": "**발동 자체가 약속이다.** 부르지 않으면 안 돈다 — lint 가 위임 지시 유무를 본다",
+      "우회": "**발동 자체가 약속이다.** 부르지 않으면 안 돈다 — lint 가 위임 지시 유무와 항목 id 를 본다",
       "judges": [
         "gatekeeper"
       ],
       "$judges-note": [
-        "`entry.content` 의 `who` 로 쓸 수 있는 에이전트의 **정본**이다.",
+        "`entry.content`·`exit.content` 의 `who` 로 쓸 수 있는 에이전트의 **정본**이다.",
         "`lint.py` 의 `gate-judge-independence` 가 여기와 대조한다 — 목록을 스크립트에 손으로",
         "열거하면 v1 의 화이트리스트처럼 조용히 낡는다.",
         "**늘리는 비용은 도구 권한이다.** 여기 적힌 에이전트는 `tools` 에 Write·Edit·Bash 가",
@@ -196,6 +208,9 @@
           }
         ]
       },
+      "exit": {
+        "content": []
+      },
       "loads": {
         "skills": [
           "contract-gate",
@@ -238,6 +253,9 @@
           }
         ]
       },
+      "exit": {
+        "content": []
+      },
       "loads": {
         "skills": [
           "traceability",
@@ -265,13 +283,7 @@
       ],
       "entry": {
         "machine": [],
-        "content": [
-          {
-            "id": "level-decision",
-            "what": "요구의 레벨(시스템·도메인·기능)이 맞나",
-            "who": "gatekeeper"
-          }
-        ],
+        "content": [],
         "promise": [
           {
             "id": "append-only",
@@ -283,6 +295,16 @@
             "what": "workflow.config.json 이 있다",
             "why": "같음 — 검사할 도구 호출 시점이 없다. config 가 없으면 게이트·가드가 'flow 프로젝트가 아니다'로 조용히 빠지므로 그 부재를 알릴 훅도 안 돈다",
             "wasGrade": "machine"
+          }
+        ]
+      },
+      "exit": {
+        "content": [
+          {
+            "id": "level-decision",
+            "what": "요구의 레벨(시스템·도메인·기능)이 맞나",
+            "who": "gatekeeper",
+            "$why-exit": "레벨은 요구 초안이 나와야 맞는지 본다 — 시작할 때는 판정할 대상이 없다"
           }
         ]
       },
@@ -305,7 +327,11 @@
           "doc-template/diagram",
           "doc-template/template-gap",
           "default-reference/delegation"
-        ]
+        ],
+        "conditional": {
+          "traceability/reverse-extract": "legacy 역추출일 때만",
+          "traceability/reverse-check": "legacy 역추출일 때만"
+        }
       },
       "procedures": []
     },
@@ -321,19 +347,23 @@
       ],
       "entry": {
         "machine": [],
-        "content": [
-          {
-            "id": "requirement-covered",
-            "what": "설계가 그 요구를 실제로 덮나",
-            "who": "gatekeeper"
-          }
-        ],
+        "content": [],
         "promise": [
           {
             "id": "requirement-doc-exists",
             "what": "그 레벨의 요구 문서가 있다",
             "why": "쓰기 시점에 걸 수는 있으나 **걸면 안 된다** — 도메인 레벨은 요구와 설계가 같은 파일이라(`01.domain/{도메인}.md` 의 요구 절·경계 절) 별도 파일 존재로 못 본다. 게다가 버그·작은 변경은 `/flow:design` 이 요구를 **자동 발급**하는 것이 정상 경로라(traceability/level.md) 요구 문서 선존재를 강제하면 그 경로가 통째로 막힌다",
             "wasGrade": "machine"
+          }
+        ]
+      },
+      "exit": {
+        "content": [
+          {
+            "id": "requirement-covered",
+            "what": "설계가 그 요구를 실제로 덮나",
+            "who": "gatekeeper",
+            "$why-exit": "덮었는지는 설계 요소가 나와야 본다 — 시작할 때는 설계가 없다"
           }
         ]
       },
@@ -426,18 +456,22 @@
             }
           }
         ],
-        "content": [
-          {
-            "id": "contract-followed",
-            "what": "구현이 계약을 따르나",
-            "who": "gatekeeper"
-          }
-        ],
+        "content": [],
         "promise": [
           {
             "id": "no-self-verify",
             "what": "구현한 쪽이 자기 검증을 하지 않는다",
             "why": "LLM 자기확인 편향 방어. 도구 권한으로 일부 갈리지만 호출 자체는 약속이다"
+          }
+        ]
+      },
+      "exit": {
+        "content": [
+          {
+            "id": "contract-followed",
+            "what": "구현이 계약을 따르나",
+            "who": "gatekeeper",
+            "$why-exit": "계약을 따랐는지는 구현을 해 봐야 안다 — 시작할 때는 코드가 없다"
           }
         ]
       },
@@ -490,13 +524,7 @@
       ],
       "entry": {
         "machine": [],
-        "content": [
-          {
-            "id": "coverage-gap",
-            "what": "요구 커버리지에 gap 이 있나",
-            "who": "gatekeeper"
-          }
-        ],
+        "content": [],
         "promise": [
           {
             "id": "run-not-infer",
@@ -508,6 +536,16 @@
             "what": "task 문서가 있다",
             "why": "verify 는 테스트를 돌린다. 그 Bash 를 문서가 없다고 막으면 과차단이고, 과차단은 사람이 훅을 꺼 버리게 만든다",
             "wasGrade": "machine"
+          }
+        ]
+      },
+      "exit": {
+        "content": [
+          {
+            "id": "coverage-gap",
+            "what": "요구 커버리지에 gap 이 있나",
+            "who": "gatekeeper",
+            "$why-exit": "커버리지 구멍은 감사 결과 그 자체다 — 돌리기 전에는 분류표가 없다"
           }
         ]
       },
@@ -559,19 +597,23 @@
       ],
       "entry": {
         "machine": [],
+        "content": [],
+        "promise": [
+          {
+            "id": "critical-rule-based",
+            "what": "critical 차단은 룰 기반 발견만 — 오탐으로 파이프라인을 멈추지 않는다"
+          }
+        ]
+      },
+      "exit": {
         "content": [
           {
             "id": "finding-severity",
             "what": "발견의 severity 판정",
             "who": "gatekeeper",
             "wasWho": "reviewer",
-            "$why": "발견을 만든 쪽이 자기 발견의 등급을 판정하면 판정 독립성이 없다(재설계 D3). `reviewer` 는 도구를 돌려 발견을 **만드는** 쪽이고, 그 등급이 국면 전환을 막을지 정하는 것은 `gatekeeper` 다. 등급 산정 자체는 `code-review/severity` 가 정본이라 만드는 쪽도 등급을 적지만, **entry.content 로 판정하는 것은 gatekeeper 다.**"
-          }
-        ],
-        "promise": [
-          {
-            "id": "critical-rule-based",
-            "what": "critical 차단은 룰 기반 발견만 — 오탐으로 파이프라인을 멈추지 않는다"
+            "$why": "발견을 만든 쪽이 자기 발견의 등급을 판정하면 판정 독립성이 없다(재설계 D3). `reviewer` 는 도구를 돌려 발견을 **만드는** 쪽이고, 그 등급이 국면 전환을 막을지 정하는 것은 `gatekeeper` 다. 등급 산정 자체는 `code-review/severity` 가 정본이라 만드는 쪽도 등급을 적지만, **exit.content 로 판정하는 것은 gatekeeper 다.**",
+            "$why-exit": "등급은 발견이 나와야 매긴다 — 시작할 때는 발견이 없다"
           }
         ]
       },
@@ -614,7 +656,10 @@
               "traceability/coverage",
               "ops-doc/postmortem",
               "default-reference/delegation"
-            ]
+            ],
+            "conditional": {
+              "traceability/reverse-check": "역추출 문서를 채점할 때만"
+            }
           }
         }
       },
@@ -645,6 +690,9 @@
             "wasGrade": "machine"
           }
         ]
+      },
+      "exit": {
+        "content": []
       },
       "loads": {
         "skills": [
@@ -694,6 +742,9 @@
         "content": [],
         "promise": []
       },
+      "exit": {
+        "content": []
+      },
       "loads": {
         "skills": [
           "drift-check",
@@ -730,6 +781,9 @@
           }
         ]
       },
+      "exit": {
+        "content": []
+      },
       "loads": {
         "skills": [
           "testing",
@@ -759,6 +813,9 @@
             "what": "외부 발행이라 사람 확인 뒤에 실행한다"
           }
         ]
+      },
+      "exit": {
+        "content": []
       },
       "loads": {
         "skills": [
@@ -878,6 +935,8 @@
         "coverage",
         "id-system",
         "level",
+        "reverse-check",
+        "reverse-extract",
         "revert-scope",
         "tagging",
         "unit-state"
@@ -898,7 +957,7 @@
       "fragments": [
         "doc-verify/grade"
       ],
-      "$note": "각 커맨드의 entry.content 도 읽는다. 채점은 하지 않는다"
+      "$note": "각 커맨드의 exit.content(끝낼 때)·entry.content(시작할 때) 도 읽는다. 채점은 하지 않는다"
     },
     "reviewer": {
       "fragments": [

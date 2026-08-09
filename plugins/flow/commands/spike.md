@@ -23,10 +23,10 @@ argument-hint: '[검증할 가설] [REFERENCE @파일 ...] [채택/기각을 가
 
 ## 게이트
 
-진입 조건의 정본은 `flow.topology.json` 의 `commands.spike.entry` 다. **이 커맨드가 스스로 판정하지 않는다.**
+게이트 조건의 정본은 `flow.topology.json` 의 `commands.spike` 의 `entry`·`exit` 다. **이 커맨드가 스스로 판정하지 않는다.**
 
 - **기계** — 없다. 오히려 **`spike/` 는 소스 쓰기 게이트의 면제 대상이다**(`gate.exemptions` 의 `spike`) — 버릴 코드에 task 문서가 없는 것이 정상이다.
-- **내용** — 없다. `entry.content` 가 비어 있으니 **여기서 `gatekeeper` 를 부르지 않는다.** 부를 자리를 만들려면 `flow.topology.json` 에 먼저 적는다 — 커맨드 본문이 게이트를 발명하지 않는다.
+- **내용** — 없다. `entry.content`·`exit.content` 가 둘 다 비어 있으니 **여기서 `gatekeeper` 를 부르지 않는다.** 부를 자리를 만들려면 `flow.topology.json` 에 먼저 적는다 — 커맨드 본문이 게이트를 발명하지 않는다.
 - **약속** — `throwaway`. **`spike/` 코드는 유지보수 자산이 아니다.** 아무 기계도 이걸 막지 않는다.
 
 ## 입력 (`$ARGUMENTS`)

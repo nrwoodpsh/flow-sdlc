@@ -96,6 +96,7 @@ def _topology(drop=None):
     def cmd(order, phase, nxt):
         c = {'order': order, 'phase': phase, 'after': [], 'next': nxt,
              'entry': {'machine': [], 'content': [], 'promise': []},
+             'exit': {'content': []},
              'loads': None, 'procedures': None}
         if drop:
             c.pop(drop, None)
@@ -175,14 +176,36 @@ def _review_skill(sections, pair='06.review'):
 
 # ── 커맨드 연결 절 ↔ topology loads · gatekeeper 위임 ──
 
-def _cmd_topo(loads, content=(), name='build'):
+def _cmd_topo(loads, content=(), name='build', slot='exit'):
+    """내용 조건은 기본이 `exit` 다 — 5개가 전부 퇴장 조건이라 거기로 내려갔다(D5·T4)."""
+    entry = {'machine': [], 'content': [], 'promise': []}
+    ex = {'content': []}
+    (entry if slot == 'entry' else ex)['content'] = list(content)
     return {TOPO_REL: json.dumps(
         {'version': 1, 'skills': {'testing': {'fragments': ['run', 'llm-cost']},
                                   'code-graph': {'fragments': ['query']}},
          'commands': {name: {'order': 1, 'phase': '구현', 'after': [], 'next': [],
-                             'entry': {'machine': [], 'content': list(content),
-                                       'promise': []},
+                             'entry': entry, 'exit': ex,
                              'loads': loads, 'procedures': []}}},
+        ensure_ascii=False, indent=2)}
+
+
+_GK_ITEM = {'id': 'contract-followed', 'what': '계약을 따랐나', 'who': 'gatekeeper'}
+
+
+def _timing(slot):
+    """내용 조건 하나를 `slot` 에 둔다. `entry` 면 판정할 대상이 없는 자리다(D5)."""
+    entry = {'machine': [], 'content': [], 'promise': []}
+    ex = {'content': []}
+    (entry if slot == 'entry' else ex)['content'] = [dict(_GK_ITEM)]
+    return {TOPO_REL: json.dumps(
+        {'version': 1,
+         'commands': {
+             'design': {'order': 1, 'phase': '설계', 'after': [], 'next': ['build'],
+                        'entry': {'machine': [], 'content': [], 'promise': []},
+                        'exit': {'content': []}, 'loads': None, 'procedures': None},
+             'build': {'order': 2, 'phase': '구현', 'after': ['design'], 'next': [],
+                       'entry': entry, 'exit': ex, 'loads': None, 'procedures': None}}},
         ensure_ascii=False, indent=2)}
 
 
@@ -265,17 +288,20 @@ def _agent(name, tools):
 
 
 def _judge(who, judges=('gatekeeper',)):
-    """`entry.content` 의 판정자 하나 + 판정자 정본 선언 + 에이전트 둘."""
+    """`exit.content` 의 판정자 하나 + 판정자 정본 선언 + 에이전트 둘.
+
+    **내용 조건을 `exit` 에 둔다** — 검사가 `entry.content` 만 보게 되돌아가면 여기서
+    대상이 판정자 선언 1건으로 줄고, 위반 픽스처가 통과해 테스트가 잡는다(D5·T4).
+    """
     files = {TOPO_REL: json.dumps(
         {'version': 1,
          'grades': {'content': {'누가 판정하나': 'gatekeeper', 'judges': list(judges)}},
          'skills': {},
          'commands': {'review': {
              'order': 1, 'phase': '리뷰', 'after': [], 'next': [],
-             'entry': {'machine': [],
-                       'content': [{'id': 'finding-severity', 'what': '발견의 등급',
-                                    'who': who}],
-                       'promise': []},
+             'entry': {'machine': [], 'content': [], 'promise': []},
+             'exit': {'content': [{'id': 'finding-severity', 'what': '발견의 등급',
+                                   'who': who}]},
              'loads': None, 'procedures': None}}},
         ensure_ascii=False, indent=2)}
     files.update(_agent('gatekeeper', 'Read, Grep, Glob'))
@@ -331,6 +357,7 @@ def _grade_doc(label):
                 'order': 1, 'phase': '수렴', 'after': [], 'next': [],
                 'entry': {'machine': [], 'content': [],
                           'promise': [{'id': 'source-changed', 'what': '소스 변경이 있다'}]},
+                'exit': {'content': []},
                 'loads': None, 'procedures': None}}},
             ensure_ascii=False, indent=2),
         'plugins/flow/commands/sync.md': (
@@ -338,6 +365,15 @@ def _grade_doc(label):
             f"- **{label}** — `source-changed`. git diff 가 비었으면 할 것이 없다.\n\n"
             "## 경계\n\n끝.\n"),
     }
+
+
+def _timing_doc(label):
+    """게이트 절의 등급 라벨. 이 검사는 topology 를 안 본다 — 본문 표시만 본다."""
+    return {'plugins/flow/commands/build.md': (
+        "---\nname: build\n---\n\n# build\n\n## 게이트\n\n"
+        "- **기계** — `unit-task-doc`. 훅이 쓰기 때마다 본다.\n"
+        f"- **{label}** — `contract-followed`. `gatekeeper` 에 넘긴다.\n\n"
+        "## 경계\n\n끝.\n")}
 
 
 def _tracked(swallow):
@@ -429,18 +465,36 @@ CASES = {
     ),
 
     # ── gatekeeper 위임 지시 ──
+    # 내용 조건은 `exit` 에 둔다 — **`entry.content` 만 보게 짜면 여기서 대상 0건이 되어
+    # 테스트가 실패한다.** 그게 T4 가 데이터 모양을 바꾸고 확인해야 하는 자리다.
     'gatekeeper-delegation': (
-        {**_cmd_topo({'skills': [], 'fragments': []},
-                     content=[{'id': 'contract-followed', 'what': '계약을 따랐나',
-                               'who': 'gatekeeper'}]),
+        {**_cmd_topo({'skills': [], 'fragments': []}, content=[_GK_ITEM]),
          **_cmd_md([('스킬', '없다')],
-                   tail="- **내용** — `gatekeeper` 에 넘긴다. 반드시 부른다.\n\n")},
+                   tail="- **내용 · 퇴장** — `contract-followed`. "
+                        "`gatekeeper` 에 넘긴다. 반드시 부른다.\n\n")},
         # 내용 조건이 있는데 부르라는 지시가 없다 = 게이트가 이름만 남았다 (v1 최대 결함)
-        {**_cmd_topo({'skills': [], 'fragments': []},
-                     content=[{'id': 'contract-followed', 'what': '계약을 따랐나',
-                               'who': 'gatekeeper'}]),
+        {**_cmd_topo({'skills': [], 'fragments': []}, content=[_GK_ITEM]),
          **_cmd_md([('스킬', '없다')],
-                   tail="- **내용** — 계약을 따랐는지 이 커맨드가 확인한다.\n\n")},
+                   tail="- **내용 · 퇴장** — `contract-followed` 를 이 커맨드가 확인한다.\n\n")},
+    ),
+
+    # ── 위임 지시 ↔ 내용 조건 id ──
+    'gate-item-named': (
+        {**_cmd_topo({'skills': [], 'fragments': []}, content=[_GK_ITEM]),
+         **_cmd_md([('스킬', '없다')],
+                   tail="- **내용 · 퇴장** — `contract-followed`. "
+                        "`gatekeeper` 에 넘긴다.\n\n")},
+        # 부른다고는 적었는데 **무엇을 넘길지** 안 적었다 = 기준이 데이터에서 오지 않는다
+        {**_cmd_topo({'skills': [], 'fragments': []}, content=[_GK_ITEM]),
+         **_cmd_md([('스킬', '없다')],
+                   tail="- **내용 · 퇴장** — `gatekeeper` 에 넘긴다. 반드시 부른다.\n\n")},
+    ),
+
+    # ── 내용 조건의 시점 ↔ 판정 대상 ──
+    'gate-timing': (
+        _timing('exit'),
+        # 퇴장 조건을 `entry` 에 적었다 — 시작할 때는 구현이 없어 판정할 대상이 없다 (D5)
+        _timing('entry'),
     ),
 
     # ── limits 정본이 하나인가 ──
@@ -462,6 +516,13 @@ CASES = {
         _grade_doc('약속'),
         # topology 는 machine 이 비었는데 본문은 "기계"라 적는다 = 거짓 표시 (H1)
         _grade_doc('기계'),
+    ),
+
+    # ── 본문의 내용 조건 시점 표시 ──
+    'gate-timing-shown': (
+        _timing_doc('내용 · 퇴장'),
+        # 시점을 안 적었다 — 읽는 쪽은 시작할 때 판정하는 것으로 읽는다 (D5)
+        _timing_doc('내용'),
     ),
 
     # ── 스킬 등급 ↔ description 문형 ──

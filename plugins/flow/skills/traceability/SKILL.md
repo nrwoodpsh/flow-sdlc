@@ -43,6 +43,8 @@ description: 요구 ID 체계·태깅·추적 매트릭스·gap 판정·유닛 �
 | 설계 요소·task 문서에 **태그를 적는다** | `references/tagging.md` |
 | 요구가 검증됐나 · gap 인가를 판정한다 | `references/coverage.md` |
 | 지금 어디까지 됐나 · 어디서 이어가나 | `references/unit-state.md` |
+| 기획서가 없어 **코드에서 요구를 뽑는다** | `references/reverse-extract.md` |
+| 역추출한 요구가 코드와 맞나를 본다 | `references/reverse-check.md` |
 | 실패해서 앞 국면으로 되돌아간다 | `references/revert-scope.md` |
 
 ## 경계

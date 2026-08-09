@@ -27,14 +27,14 @@ v1 은 `build` 와 `verify unit` 을 갈라 뒀지만 build 루프가 이미 단
 
 ## 게이트
 
-진입 조건의 정본은 `flow.topology.json` 의 `commands.build.entry` 다. **이 커맨드가 스스로 판정하지 않는다.**
+게이트 조건의 정본은 `flow.topology.json` 의 `commands.build` 의 `entry`·`exit` 다. **이 커맨드가 스스로 판정하지 않는다.**
 
 - **기계** — `unit-task-doc`·`unit-req-tag`. 소스에 `Write`·`Edit` 가 들어가는 순간 `gate-source-write.sh` 가 task 문서와 요구 태그를 본다. 없으면 차단이다. **훅을 끄거나 우회하지 말고 task 문서를 먼저 만든다**(`/flow:design`).
-- **내용** — `contract-followed`. **`gatekeeper` 에 넘긴다. 반드시 부른다** — 진행하는 쪽이 자기 조건을 판정하면 판정 독립성이 없다.
+- **내용 · 퇴장** — `contract-followed`. **끝낼 때 판정한다** — 시작할 때는 코드가 없어 판정할 대상이 없다. **`gatekeeper` 에 넘긴다. 반드시 부른다** — 진행하는 쪽이 자기 조건을 판정하면 판정 독립성이 없다.
 
   ```
-  gatekeeper 위임 — entry.content 의 contract-followed
-    준다: task 경로 · 계약 경로 · 이번에 건드릴 파일 목록
+  gatekeeper 위임 — exit.content 의 contract-followed   (구현·단위 검증을 끝낸 뒤, 기록 전)
+    준다: task 경로 · 계약 경로 · 이번에 건드린 파일 목록
     받는다: 충족 / 미충족 + 근거(파일:라인)
     미충족이면 여기서 멈춘다 — 계약을 코드에 맞춰 고치지 않는다
   ```
@@ -95,6 +95,7 @@ builder 구현 → verifier 실행
 ## 종료 조건
 
 - 계약 게이트 + 단위 검증 + 전체 빌드 통과(Exit 0) · `4.build/`·`5.verify/` 기록 · task `History` 갱신
+- **퇴장 게이트 통과** — `contract-followed` 를 `gatekeeper` 가 충족으로 판정했다. **미충족이면 끝난 것이 아니다**
 - **커밋·push 안 함** → `/flow:sync` 로 문서를 맞춘다
 
 ## 가드레일

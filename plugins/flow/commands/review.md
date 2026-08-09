@@ -21,7 +21,7 @@ argument-hint: '[doc | deep] [파일/도메인/유닛 경로 (선택 — 없으�
 | 대상 | 스킬 | 조각 |
 |:--|:--|:--|
 | 코드 | `code-review` · `code-graph` · `testing` · `plain-writing` · `default-reference` | `code-review/layers` · `code-review/severity` · `code-review/checklist` · `code-graph/query` · `code-graph/service-boundary` · `testing/run` · `default-reference/delegation` |
-| 문서 | `doc-verify` · `usecase` · `traceability` · `ops-doc` · `plain-writing` · `default-reference` | `doc-verify/grade` · `doc-verify/scoring` · `doc-verify/canon-map` · `usecase/granularity` · `usecase/figure-scope` · `usecase/rule-level` · `traceability/coverage` · `ops-doc/postmortem` · `default-reference/delegation` |
+| 문서 | `doc-verify` · `usecase` · `traceability` · `ops-doc` · `plain-writing` · `default-reference` | `doc-verify/grade` · `doc-verify/scoring` · `doc-verify/canon-map` · `usecase/granularity` · `usecase/figure-scope` · `usecase/rule-level` · `traceability/coverage` · `ops-doc/postmortem` · `default-reference/delegation` · (조건 — 역추출 문서를 채점할 때만) `traceability/reverse-check` |
 
 | 무엇 | 이름 |
 |:--|:--|
@@ -30,13 +30,13 @@ argument-hint: '[doc | deep] [파일/도메인/유닛 경로 (선택 — 없으�
 
 ## 게이트
 
-진입 조건의 정본은 `flow.topology.json` 의 `commands.review.entry` 다. **이 커맨드가 스스로 판정하지 않는다.**
+게이트 조건의 정본은 `flow.topology.json` 의 `commands.review` 의 `entry`·`exit` 다. **이 커맨드가 스스로 판정하지 않는다.**
 
 - **기계** — 없다. 리뷰는 아무 때나 끼울 수 있어야 한다.
-- **내용** — `finding-severity`. 발견과 등급 **초안**은 `reviewer` 가 만든다(도구를 돌리는 쪽이 근거를 갖는다). 그러나 **판정은 `gatekeeper` 에 넘긴다. 반드시 부른다** — 발견을 만든 쪽이 자기 발견의 등급을 확정하면 판정 독립성이 없다.
+- **내용 · 퇴장** — `finding-severity`. **끝낼 때 판정한다** — 시작할 때는 발견이 없어 등급을 매길 대상이 없다. 발견과 등급 **초안**은 `reviewer` 가 만든다(도구를 돌리는 쪽이 근거를 갖는다). 그러나 **판정은 `gatekeeper` 에 넘긴다. 반드시 부른다** — 발견을 만든 쪽이 자기 발견의 등급을 확정하면 판정 독립성이 없다.
 
   ```
-  gatekeeper 위임 — entry.content 의 finding-severity
+  gatekeeper 위임 — exit.content 의 finding-severity   (발견 목록이 나온 뒤 · 리포트 확정 전)
     준다: 발견마다 파일:라인 · 근거(어느 층·어느 룰) · 재현 조건 · reviewer 가 매긴 등급
     받는다: 진짜 문제인가 / 재현되는가 / 등급이 맞나 — 반증 우선
     뒤집히면 등급을 내리고 **뒤집힌 사유를 리포트에 함께 적는다**

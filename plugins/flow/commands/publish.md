@@ -24,10 +24,10 @@ argument-hint: '[도메인/유닛 또는 project (선택)] [→ 발행처 (선�
 
 ## 게이트
 
-진입 조건의 정본은 `flow.topology.json` 의 `commands.publish.entry` 다. **이 커맨드가 스스로 판정하지 않는다.**
+게이트 조건의 정본은 `flow.topology.json` 의 `commands.publish` 의 `entry`·`exit` 다. **이 커맨드가 스스로 판정하지 않는다.**
 
 - **기계** — 없다. 외부 발행은 우리 훅이 닿는 곳이 아니다.
-- **내용** — 없다. `entry.content` 가 비어 있으니 **여기서 `gatekeeper` 를 부르지 않는다.** 부를 자리를 만들려면 `flow.topology.json` 에 먼저 적는다 — 커맨드 본문이 게이트를 발명하지 않는다.
+- **내용** — 없다. `entry.content`·`exit.content` 가 둘 다 비어 있으니 **여기서 `gatekeeper` 를 부르지 않는다.** 부를 자리를 만들려면 `flow.topology.json` 에 먼저 적는다 — 커맨드 본문이 게이트를 발명하지 않는다.
 - **약속** — `external-confirm`. **사람 확인 뒤에 실행한다.** 아무 기계도 이걸 막지 않는다 — 그래서 약속이라고 적는다.
 
 ## 입력 (`$ARGUMENTS`)

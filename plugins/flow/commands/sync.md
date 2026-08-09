@@ -23,11 +23,11 @@ argument-hint: '[도메인 (선택 — 없으면 git diff 에서 자동 분류)]
 
 ## 게이트
 
-진입 조건의 정본은 `flow.topology.json` 의 `commands.sync.entry` 다. **이 커맨드가 스스로 판정하지 않는다.**
+게이트 조건의 정본은 `flow.topology.json` 의 `commands.sync` 의 `entry`·`exit` 다. **이 커맨드가 스스로 판정하지 않는다.**
 
 - **약속** — `source-changed`. `git diff` 가 비었으면 동기화할 것이 없다.
   **진행하는 쪽이 자기 diff 를 보는 것**이라 판정 독립성이 없다 — 그래서 약속이다.
-- **내용** — 없다. `entry.content` 가 비어 있으니 **여기서 `gatekeeper` 를 부르지 않는다.** 부를 자리를 만들려면 `flow.topology.json` 에 먼저 적는다 — 커맨드 본문이 게이트를 발명하지 않는다.
+- **내용** — 없다. `entry.content`·`exit.content` 가 둘 다 비어 있으니 **여기서 `gatekeeper` 를 부르지 않는다.** 부를 자리를 만들려면 `flow.topology.json` 에 먼저 적는다 — 커맨드 본문이 게이트를 발명하지 않는다.
 
 
 ## 입력 (`$ARGUMENTS`)

@@ -16,20 +16,22 @@ argument-hint: '[sys | domain {도메인} | func {도메인}/{NN.유닛}] [legac
 |:--|:--|
 | 스킬 | `traceability`·`usecase`·`doc-template`·`plain-writing`·`default-reference` |
 | 조각 | `traceability/level`·`traceability/id-system`·`traceability/conflict`·`traceability/coverage`·`usecase/granularity`·`usecase/rule-level`·`usecase/figure-scope`·`doc-template/diagram`·`doc-template/template-gap`·`default-reference/delegation` |
+| 조건부 — **legacy 역추출일 때만** | `traceability/reverse-extract` · `traceability/reverse-check` |
 
 기존 요구·코드를 넓게 확인할 때는 `explorer` 에 위임한다 — `legacy` 에서는 필수다. 위임 판정은 `default-reference` 의 `delegation` 조각이 정본이다.
 
-## 진입 조건
+## 게이트
 
-정본은 `${CLAUDE_PLUGIN_ROOT}/flow.topology.json` 의 `commands.prd.entry` 다. **여기서는 선언만 한다.**
+정본은 `${CLAUDE_PLUGIN_ROOT}/flow.topology.json` 의 `commands.prd` 의 `entry`·`exit` 다. **여기서는 선언만 한다.**
 
 | 등급 | 조건 | 누가 판정 |
 |:--|:--|:--|
 | 약속 | `workflow.config.json` 이 있다 | **아무도** — 훅이 커맨드 호출을 못 본다 |
-| 내용 | 요구의 레벨(시스템·도메인·기능)이 맞나 | **`gatekeeper`** — 진행하는 쪽이 아니다 |
+| 내용 · 퇴장 | `level-decision` — 요구의 레벨(시스템·도메인·기능)이 맞나 | **`gatekeeper`** — 진행하는 쪽이 아니다 |
 | 약속 | 요구 ID 는 불변·append-only — 번호를 재편하지 않는다 | 아무도. 규약 정본은 `traceability` 다 |
 
-**착지 전에 `gatekeeper` 를 부른다.** 판정할 것은 위 내용 조건과 **외부 쿼터 대조가 비어 있지 않은가** 다.
+**`level-decision` 은 퇴장 조건이다** — 시작할 때는 요구 초안이 없어 레벨이 맞는지 볼 대상이 없다.
+**착지 전에 `gatekeeper` 를 부른다.** 판정할 것은 그 내용 조건과 **외부 쿼터 대조가 비어 있지 않은가** 다.
 자기가 정한 레벨을 자기가 승인하지 않는다 — 그것이 v1 에서 게이트가 이름만 남았던 자리다.
 
 ## 입력 (`$ARGUMENTS`)
@@ -88,22 +90,9 @@ argument-hint: '[sys | domain {도메인} | func {도메인}/{NN.유닛}] [legac
 
 기획서가 없고 **코드가 유일한 진실**일 때. 코드에 구현된 사실을 요구로 등록한다.
 
-- **`explorer` 에 위임한다** — 코드베이스 원문을 메인 컨텍스트로 끌어오지 않는다.
-- 레벨이 읽을 범위를 정한다: `sys` 는 횡단 구현(인증·에러·로깅·설정), `domain` 은 엔티티·서비스 경계·용어, `func` 은 그 모듈 동작.
-- 뽑은 항목은 **전부 `확인 필요` 로 표기**한다. 구현 세부와 의도는 다르다 — 확정은 사람이 한다.
-- 의도가 불분명한 코드(우회·임시 처리)는 요구로 올리지 말고 **`의도 불명` 으로 따로 나열**한다.
-
-**역추출 요구에 신규용 게이트를 걸지 않는다.** 이미 운영 중인 것에 "완료 기준이 측정 가능한가" 를 물으면 레거시에 flow 를 못 붙인다.
-
-| 무엇 | 역추출에서 |
-|:--|:--|
-| 측정 가능한 완료 기준 | **면제** — 코드가 하는 일을 옮긴 것이다 |
-| 외부 쿼터 대조 | **`현행 — {실제 동작}`** 으로 적는다. 넘는 것 같아도 돌고 있다면 어떻게 넘기는지(재시도·큐)를 적는다 |
-| 측정 수단 설계 요소 | **면제** — 설계 단계가 아니다 |
-
-- **면제 근거는 `상태: 확인 필요` 다.** 그 값의 뜻·검수 뒤 처리·오용 금지는 `traceability` 의 `coverage` 조각이 정본이다.
-- **`func legacy` 는 유닛을 새로 만들지 않는다.** 레거시 코드에는 work-unit 경계가 없어 번호를 지어내야 하는데, 지어낸 번호는 나중에 실제 작업 단위와 어긋난다. 유닛이 있으면 그 요구 문서에 현행 동작을 append 하고, 없으면 **거부하고 `domain legacy` 를 안내**한다.
-- **표를 새로 만들지 않는다** — 템플릿의 요구 표에 행을 더하고 `상태` 를 `확인 필요` 로 적는다.
+- **절차의 정본은 `traceability` 의 `reverse-extract` 조각이다 — 뽑기 전에 읽는다.** 여기 옮겨 적지 않는다.
+- **역추출 요구에 신규용 게이트를 걸지 않는다.** 무엇이 면제인지는 `traceability` 의 `coverage` 조각이 정본이다.
+- 뽑은 뒤 **근거가 코드에 실재하나를 대본다** — `traceability` 의 `reverse-check` 조각을 읽고 그 절차를 돈다. 표본 판정은 `verifier` 에 넘긴다.
 
 ### ID 를 발급하고 기록한다
 

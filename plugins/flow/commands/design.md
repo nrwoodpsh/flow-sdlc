@@ -21,19 +21,20 @@ argument-hint: '[sys | domain {도메인} | {도메인}/{NN.유닛} | 자유 문
 
 영향·사각지대를 넓게 훑을 때는 `explorer` 에 위임한다. 위임 판정 자체는 `default-reference` 의 `delegation` 조각이 정본이다.
 
-## 진입 조건
+## 게이트
 
-정본은 `${CLAUDE_PLUGIN_ROOT}/flow.topology.json` 의 `commands.design.entry` 다. **여기서는 선언만 한다.**
+정본은 `${CLAUDE_PLUGIN_ROOT}/flow.topology.json` 의 `commands.design` 의 `entry`·`exit` 다. **여기서는 선언만 한다.**
 
 | 등급 | 조건 | 누가 판정 |
 |:--|:--|:--|
-| 내용 | 설계가 그 요구를 실제로 덮나 | **`gatekeeper`** — 진행하는 쪽이 아니다 |
+| 내용 · 퇴장 | `requirement-covered` — 설계가 그 요구를 실제로 덮나 | **`gatekeeper`** — 진행하는 쪽이 아니다 |
 | 약속 | 그 레벨의 요구 문서가 있다 | **아무도** — 훅이 커맨드 호출을 못 본다 |
 
 **`요구 문서가 있다` 는 약속이다 — 기계가 아니다.** 걸 수 있는데 안 거는 것이 아니라,
 걸면 **정상 경로가 막힌다**: 도메인 레벨은 요구와 설계가 같은 파일이고(`01.domain/{도메인}.md`),
 버그·작은 변경은 이 커맨드가 요구를 **자동 발급**하는 것이 정상이다(`traceability` 의 `level`).
 
+**`requirement-covered` 는 퇴장 조건이다** — 덮었는지는 설계 요소가 나와야 보이고, 시작할 때는 설계가 없다.
 **착지 전에 `gatekeeper` 를 부른다.** 설계 요소가 요구 ID 를 빠짐없이 덮는지, 태그가 실제로 달렸는지를 넘긴다.
 **부르지 않고 다음 국면으로 넘어가지 않는다** — 이름만 부르고 안 부르면 게이트가 없는 것이다.
 
