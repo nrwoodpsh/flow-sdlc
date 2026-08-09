@@ -11,7 +11,7 @@ flow 플러그인 자체를 만드는 리포다. 사용자 프로젝트가 아�
 
 | 무엇 | 정본 | 생성물 |
 |:--|:--|:--|
-| 위상·진입 조건·게이트 면제 | `plugins/flow/flow.topology.json` | 매니페스트 `description` |
+| 위상·게이트 조건(진입·퇴장)·게이트 면제 | `plugins/flow/flow.topology.json` | 매니페스트 `description` |
 | 차단 목록 (단순 규칙) | `plugins/flow/guard-rules.json` | `README.md` 차단표 · 아래 요약 |
 | 차단 목록 (예외 로직) | `guard-danger.sh` 머리말의 `@flow-shell-rules` 블록 | 같음 |
 

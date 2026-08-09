@@ -26,13 +26,13 @@ v1 README는 "드리프트 4겹"이라 적었지만 **사람 경로만 4겹이�
 | 코드↔문서 드리프트 (커밋) | — | `--no-verify`를 가드가 막는다 | — | git 훅 (사람은 `--no-verify` 가능) |
 
 - **"보장"이라 적지 않는다.** 기계인 것은 `Write`·`Edit` 경로이고, `Bash`는 가드가 닿는 범위까지, MCP는 밖이다.
-- 내용 판정(설계가 요구를 실제로 덮나)은 `gatekeeper` 에이전트가 하고, **부르는 것 자체는 약속이다.**
+- 내용 판정(설계가 요구를 실제로 덮나)은 `gatekeeper` 에이전트가 **그 커맨드가 끝낼 때** 한다 — 산출물이 나와야 판정할 대상이 있다(진입 시점에는 없다). **부르는 것 자체는 약속이다.**
 - 약속을 약속이라고 적는 것이 `plugins/flow/flow.topology.json`의 일이다.
 
 ## 무엇이 정본인가
 
 ```
-plugins/flow/flow.topology.json   위상 · 진입 조건(등급별) · 게이트 면제
+plugins/flow/flow.topology.json   위상 · 게이트 조건(진입·퇴장, 등급별) · 게이트 면제
   └─ gate-source-write.sh          (읽는다)
 plugins/flow/guard-rules.json     차단 목록 중 단순 규칙
   ├─ guard-danger.sh               (읽는다)
@@ -150,8 +150,9 @@ guard-danger.sh 머리말            예외 로직이 붙은 셸 규칙 (고정 
 | 검사기 자기 테스트 | `python3 scripts/lint.test.py` | **위반 픽스처가 통과하면 그 검사는 사문화** |
 | 생성물 대조 | `python3 scripts/gen_docs.py --check` | 생성물을 손으로 고치는 것 |
 | 매니페스트 | `bash scripts/bump-version.sh --check` | 두 파일이 어긋난 채 버전이 올라가는 것 |
+| 공식 검증기 | `claude plugin validate ./plugins/flow` · `claude plugin validate .` | **Claude Code 가 이 파일을 읽을 수 있나** — 벤더 스키마의 일이라 우리 검사기가 대신 판정할 수 없다 |
 
-넷 다 `.github/workflows/ci.yml`에서 돈다. **`.example`가 아니다** — v1은 드리프트 CI를 옵트인
+전부 `.github/workflows/ci.yml`에서 돈다. **`.example`가 아니다** — v1은 드리프트 CI를 옵트인
 예시로 뒀고 그게 AI 경로가 1겹이던 이유다.
 
 **사용자 프로젝트에 주는 CI는 여전히 옵트인이다**(`.example`). 켜는 것은 그 프로젝트의 선택이고,
