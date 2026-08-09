@@ -76,7 +76,8 @@ deny_out() {   # <제목> <이유> <어떻게 하나>
   echo "   왜: $2" 1>&2
   echo "   → $3" 1>&2
   echo "" 1>&2
-  echo "   (판정 근거: plugins/flow/flow.topology.json 의 gate 절 · 면제는 spike/ · 유닛 없음 · 소스 아님)" 1>&2
+  # **면제 목록을 여기 적지 않는다** — 적는 순간 정본이 둘이 되고, 늘어난 면제가 여기서 빠진다.
+  echo "   (판정 근거: plugins/flow/flow.topology.json 의 gate 절 — 면제 목록도 거기 있다)" 1>&2
   echo "" 1>&2
 }
 
@@ -104,11 +105,18 @@ fi
 # 셸로 glob·frontmatter·File Map 을 다루면 인용·단어분리 사고가 다시 난다.
 # guard-danger.sh 의 토크나이저를 재작성하지 않는 것과 같은 이유다.
 verdict=$(python3 - "$TOPO" "$ROOT" "$ARG_PATH" <<'PY' 2>/dev/null
-import fnmatch, json, os, re, sys
+import datetime, fnmatch, json, os, re, sys
 
 topo_p, root, target = sys.argv[1], sys.argv[2], sys.argv[3]
 
+# 면제 심사에서 걸러진 항목을 여기 담는다. **최종 판정이 deny 일 때만** 화면에 낸다 —
+# 걸러진 면제 때문에 `.md`·`doc/` 쓰기까지 막히면 그게 과차단이고, 사람이 훅을 꺼 버린다.
+HOLD = {}
+
+
 def out(code, title, why, how='', note=''):
+    if code == 'deny' and HOLD.get('v'):
+        code, title, why, how, note = HOLD['v']
     print('\x1f'.join([code, title, why, how, note]))
     raise SystemExit(0)
 
@@ -193,19 +201,102 @@ def any_glob(path, pats):
 src = g.get('source') or {}
 ex_ids = {e.get('id'): e for e in (g.get('exemptions') or [])}
 
-# spike/ · 레거시 면제 — 경로 목록은 topology + workflow.config 양쪽에서 온다
+# spike/ · 레거시 면제.
+#
+# **두 출처를 다르게 다룬다.**
+#   topology 의 `paths` — 플러그인 정본이다. 우리가 심사한 것이라 그대로 면제다.
+#   workflow.config 의 `configKey` — 사용자 프로젝트가 스스로 여는 문이다. 여기가 fail-open 의 입구라
+#     형식(기록이 있나) · 넓이(리포 전체가 아닌가) · 만료를 본다. 규칙 목록은 topology 가 갖는다.
+#
+# 판정을 셋으로 가른 이유: 막으면(deny) 사람이 훅을 끄고, 통과시키면(allow) 게이트가 이름만 남는다.
+# 그래서 **기록 없는 면제는 ask** 다 — 막지 않되 조용하지도 않다.
+TODAY = datetime.date.today().strftime('%Y%m%d')
+
+
+def norm_pat(pat):
+    """면제 글로브도 대상 경로와 **같은 규칙으로** 정규화한다.
+
+    안 하면 `./vendor/**` 이 아무것에도 안 맞고 **조용히 죽은 면제**가 된다 — 사람은
+    면제를 걸었다고 믿는데 계속 막히고, 그러면 훅을 꺼 버린다. 과차단의 입구다.
+    """
+    p = os.path.normpath(pat.strip().replace(os.sep, '/')).replace(os.sep, '/')
+    return p.lstrip('/')
+
+
+def has_literal_segment(pat):
+    """와일드카드 없는 경로 조각이 하나라도 있나. 없으면 면제가 아니라 게이트 끄기다."""
+    return any(s and s not in ('**', '.') and not re.search(r'[*?\[]', s)
+               for s in pat.split('/'))
+
+
+def hold(v):
+    HOLD.setdefault('v', v)
+
+
+def judge_config_entry(e, raw):
+    """(이 항목이 판정에 걸리나, 판정키, 사람에게 보일 이유) — 안 걸리면 (False, …)."""
+    # 글로브 문자열 하나만 적은 것도 항목이다 — `path` 만 채워진 기록으로 본다
+    rec = raw if isinstance(raw, dict) else {'path': str(raw or '')}
+    form = e.get('entryForm') or {}
+    if not str(rec.get('path') or '').strip():
+        return True, 'unrecorded', '항목에 `path` 가 없다'
+    pat = norm_pat(str(rec.get('path')))
+    if not has_literal_segment(pat):
+        # 넓이 판정은 **맞는지 보기 전에** 한다 — 리포 전체 글로브는 정규화해도 안 맞는 형태
+        # (`./**`)가 있어서, 맞는 것만 심사하면 그런 항목이 심사를 통째로 빠져나간다.
+        return True, 'tooBroad', f'`{pat}` 은 와일드카드 없는 경로 조각이 없다 — 리포 전체·확장자 전체 면제다'
+    if not any_glob(rel, [pat]):
+        return False, '', ''
+    miss = [k for k in (form.get('required') or [])
+            if not str(rec.get(k) or '').strip()]
+    scopes = form.get('scopes') or {}
+    scope = str(rec.get('scope') or '').strip()
+    if scope and scopes and scope not in scopes:
+        miss.append(f'scope (쓸 수 있는 것은 {" · ".join(sorted(scopes))})')
+    if miss:
+        return True, 'unrecorded', f'`{pat}` 항목에 {" · ".join(miss)} 가 없다'
+    until = re.sub(r'[^0-9]', '', str(rec.get('until') or ''))
+    if scope == 'legacy' and not until:
+        return True, 'unrecorded', f'`{pat}` 은 scope=legacy 인데 `until` 이 없다'
+    if until and until < TODAY:
+        return True, 'expired', f'`{pat}` 의 면제가 {until} 에 만료됐다'
+    return True, 'recorded', str(rec.get('why') or '')
+
+
 for eid in ('spike', 'legacy-exempt'):
     e = ex_ids.get(eid)
     if not e:
         continue
-    pats = list(e.get('paths') or [])
-    ck = e.get('configKey')
-    if ck:
-        extra = dig(cfg, ck)
-        if isinstance(extra, list):
-            pats += [str(x) for x in extra]
-    if any_glob(rel, pats):
+    if any_glob(rel, [str(x) for x in (e.get('paths') or [])]):
         out('allow', '', f'면제 — {e.get("what")}', note=eid)
+
+    ck = e.get('configKey')
+    if not ck:
+        continue
+    decide = ((e.get('entryForm') or {}).get('decide')) or {}
+    listed = dig(cfg, ck)
+    if listed is not None and not isinstance(listed, list):
+        hold(('ask', '면제 목록이 목록이 아니다',
+              f'{ck} 가 배열이 아니라 {type(listed).__name__} 다 — 지금 면제가 하나도 안 걸린다',
+              f'{ck} 를 배열로 적으세요.', 'exempt-not-a-list'))
+        listed = []
+    for raw in listed or []:
+        matched, key, reason = judge_config_entry(e, raw)
+        if not matched:
+            continue
+        if key == 'recorded':
+            out('allow', '', f'면제: {reason or e.get("what")}', note=eid)
+        d = decide.get(key) or 'ask'
+        if key == 'tooBroad':
+            hold((d, '면제 항목이 너무 넓어 무시했다', f'{ck} 의 {reason}',
+                  f'면제할 구역을 경로로 좁혀 적으세요 (예: `vendor/**`). '
+                  f'이번에 고치는 파일이면 면제가 아니라 task 문서 File Map 에 `{rel}` 을 적으세요. '
+                  f'이 목록은 게이트를 끄는 스위치가 아닙니다.', 'exempt-too-broad'))
+        else:
+            hold((d, '면제가 기록되지 않았거나 만료됐다', f'{ck} 의 {reason}',
+                  f'그 항목에 `why`·`scope` 를 적으세요 (scope=legacy 면 `until` 도). '
+                  f'기록 없는 면제는 막지 않되 매번 묻습니다 — 누가 왜 열었나가 남아야 합니다.',
+                  f'exempt-{key}'))
 
 # 소스인가 — drift-hook.sh 의 is_source 와 같은 규칙이어야 한다
 ignore = dig(cfg, src.get('ignoreKey') or 'drift.ignore')

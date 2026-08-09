@@ -1570,6 +1570,55 @@ def _machine_gate_wired(ctx):
     return r
 
 
+# ── 면제를 누가 채우나가 실제로 적혀 있나 ──
+# **D2 가 이 검사의 부재였다.** `gate.legacyExempt` 는 기계로는 처음부터 돌았는데
+# 채우라는 지시가 어느 커맨드에도 없었다 — 리포 전체에서 정의와 빈 배열 두 곳뿐이었다.
+# 그런데 `build.md` 는 작동하는 면제인 것처럼 적었다. 도달 불가한 탈출구는 탈출구가 아니고,
+# 그 자리에서 사람은 훅을 끈다.
+#
+# 그래서 **설정 키로 여는 면제에는 채우는 커맨드를 적게 하고, 그 커맨드가 정말 그 키를
+# 말하는지 대조한다.** 양방향이다 — 데이터가 커맨드를 가리키고 커맨드가 키를 말해야 한다.
+@check('exempt-fill-wired', '면제를 누가 채우나 ↔ 커맨드 본문',
+       '채우는 길이 없는 면제는 도달 불가고, 사람은 그 자리에서 훅을 끈다 (D2)')
+def _exempt_fill_wired(ctx):
+    r = Result(unit='설정 면제')
+    tp = os.path.join(ctx.root, 'plugins/flow/flow.topology.json')
+    if not os.path.exists(tp):
+        return r
+    try:
+        topo = json.loads(ctx.read(tp))
+    except json.JSONDecodeError as e:
+        r.targets = 1
+        r.fail(f"flow.topology.json 파싱 실패 — {e}")
+        return r
+
+    for ex in ((topo.get('gate') or {}).get('exemptions') or []):
+        ck = (ex or {}).get('configKey')
+        if not ck:
+            continue                      # 플러그인 정본 경로만 쓰는 면제는 채울 것이 없다
+        r.targets += 1
+        eid = ex.get('id')
+        fills = ex.get('whoFills')
+        text = '\n'.join(fills) if isinstance(fills, list) else str(fills or '')
+        cmds = sorted(set(re.findall(r'/flow:([a-z][a-z0-9-]*)', text)))
+        if not cmds:
+            r.fail(f"채우는 커맨드가 없다 — gate.exemptions `{eid}` 의 `{ck}` 는 프로젝트가 "
+                   f"채워야 하는데 `whoFills` 가 어느 커맨드도 가리키지 않는다 "
+                   f"(그러면 그 면제는 도달 불가다 — D2)")
+            continue
+        for cmd in cmds:
+            p = os.path.join(ctx.root, 'plugins/flow/commands', f'{cmd}.md')
+            if not os.path.exists(p):
+                r.fail(f"없는 커맨드를 가리킨다 — gate.exemptions `{eid}` 의 `whoFills` 가 "
+                       f"`/flow:{cmd}` 를 적었는데 commands/{cmd}.md 가 없다")
+                continue
+            if ck not in ctx.read(p):
+                r.fail(f"커맨드가 그 키를 말하지 않는다 — gate.exemptions `{eid}` 는 "
+                       f"`/flow:{cmd}` 가 `{ck}` 를 채운다고 적었는데 commands/{cmd}.md 에 "
+                       f"그 키가 없다 (데이터만 가리키면 그게 D2 다)")
+    return r
+
+
 # ── 커맨드가 표시하는 등급·시점 ↔ topology ──
 # 게이트 절은 손으로 쓴다(생성물이 아니다). 그래서 topology 에서 등급을 내려도 본문은
 # 그대로 남는다 — H1 이 정확히 그 상태였다(5곳이 "기계"라 적혔는데 훅은 안 봄).

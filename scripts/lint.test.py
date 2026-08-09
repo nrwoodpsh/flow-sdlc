@@ -282,6 +282,30 @@ def _wired(enforced):
     }
 
 
+def _exempt(names_key):
+    """설정 키로 여는 면제 하나 + 그 키를 채운다는 커맨드.
+
+    `names_key=False` 면 커맨드 본문이 그 키를 말하지 않는다 — D2 의 형태다
+    (데이터는 채우는 자리를 가리키는데 정작 그 커맨드는 키를 모른다).
+    """
+    body = ('설정을 채운다. `gate.legacyExempt` 에 등록한다.\n' if names_key
+            else '설정을 채운다.\n')
+    return {
+        TOPO_REL: json.dumps(
+            {'version': 1,
+             'gate': {'exemptions': [
+                 {'id': 'spike', 'what': 'spike/ 아래', 'paths': ['spike/**']},
+                 {'id': 'legacy-exempt', 'what': '면제 경로',
+                  'configKey': 'gate.legacyExempt',
+                  'whoFills': ['`/flow:setup` 의 면제 구역 확정이 채운다']},
+             ]},
+             'commands': {}},
+            ensure_ascii=False, indent=2),
+        'plugins/flow/commands/setup.md':
+            f"---\ndescription: 세팅\n---\n\n# /flow:setup\n\n{body}",
+    }
+
+
 def _agent(name, tools):
     return {f'plugins/flow/agents/{name}.md':
             f"---\nname: {name}\ndescription: {name} 다\ntools: {tools}\n---\n\n# {name}\n"}
@@ -509,6 +533,13 @@ CASES = {
         _wired(enforced=True),
         # `machine` 이라 적었는데 무엇이 강제하는지가 없다 = 아무도 안 보는 기계 (H1)
         _wired(enforced=False),
+    ),
+
+    # ── 면제를 누가 채우나 ↔ 커맨드 본문 ──
+    'exempt-fill-wired': (
+        _exempt(names_key=True),
+        # 데이터는 setup 이 채운다 하는데 setup 본문에 그 키가 없다 = 도달 불가 (D2)
+        _exempt(names_key=False),
     ),
 
     # ── 커맨드 등급 표시 ↔ topology ──

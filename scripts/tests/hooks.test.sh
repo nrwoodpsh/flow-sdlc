@@ -594,8 +594,22 @@ assert g.get("exemptions"), "gate.exemptions 가 없다"
 ids={e.get("id") for e in g["exemptions"]}
 for need in ("no-units","spike","legacy-exempt"):
     assert need in ids, f"면제 {need} 가 없다"
-assert g.get("missingCanon",{}).get("decision"), "missingCanon.decision 이 없다"' "$TOPO" \
-  && ok_ "gate 절 — 면제 셋 + 정본 부재 판정" || no_ "gate 절이 불완전하다"
+assert g.get("missingCanon",{}).get("decision"), "missingCanon.decision 이 없다"
+# 레거시 면제의 심사 규칙이 topology 에 있나 — 스크립트가 이 값을 읽어 판정한다.
+# 비면 스크립트 기본값으로 돌아 **정본이 둘**이 된다. D2 는 이 자리가 비어서 생겼다.
+le=[e for e in g["exemptions"] if e.get("id")=="legacy-exempt"][0]
+assert le.get("configKey"), "legacy-exempt 에 configKey 가 없다"
+assert le.get("whoFills"), "면제를 누가 채우나가 없다 — 그게 D2 였다"
+f=le.get("entryForm") or {}
+for k in ("required","scopes","decide"):
+    assert f.get(k), f"entryForm.{k} 가 없다"
+for k in ("recorded","unrecorded","expired","tooBroad"):
+    assert f["decide"].get(k), f"decide.{k} 가 없다"
+assert f["decide"]["recorded"]=="allow", "기록된 면제는 통과여야 한다"
+assert f["decide"]["tooBroad"]=="deny", "너무 넓은 면제는 받지 않는다"
+assert f["decide"]["unrecorded"]=="ask", "기록 없는 면제는 ask 다 — allow 면 조용한 fail-open"
+assert le.get("tooBroad",{}).get("rule"), "넓이 규칙 이름이 없다"' "$TOPO" \
+  && ok_ "gate 절 — 면제 셋 + 정본 부재 판정 + 면제 심사 규칙" || no_ "gate 절이 불완전하다"
 
 # 프로젝트 픽스처를 만든다. <디렉터리> <유닛?> <task?> <FileMap 경로|-> <요구태그?>
 mkproj_() {
@@ -693,12 +707,85 @@ gt 통과 "src/a.ts" "$P4" "요구 태그가 있으면 거친 판정으로 통�
 P5="$TMP/gate-fallback-notag"; mkproj_ "$P5" yes yes - no
 gt 차단 "src/a.ts" "$P5" "요구 태그도 없으면 차단"
 
-head_ "게이트 — 레거시 면제는 config 로도 늘린다"
-P6="$TMP/gate-legacy"; mkproj_ "$P6" yes no - no
-printf '{"gate":{"legacyExempt":["legacy/**"]}}\n' > "$P6/workflow.config.json"
-gt 차단 "src/a.ts"        "$P6" "면제 밖"
-gt 통과 "legacy/old.ts"   "$P6" "면제 안"
-gt 통과 "legacy/deep/x.ts" "$P6" "면제 안 · 하위"
+# ── 레거시 면제 (D2) ────────────────────────────────────────
+# 기계는 처음부터 돌았다. 없던 것은 **채우는 길**이고, 길을 열면 반대쪽 실패가 생긴다 —
+# `legacyExempt` 에 `**` 한 줄이면 게이트가 이름만 남는다(사람이 스스로 여는 fail-open).
+# 그래서 판정을 셋으로 갈랐다.
+#   기록됨(why·scope 있음)  → allow   조용히 통과한다
+#   기록 없음 · 만료됨       → **ask**  막지 않되 조용하지도 않다. 막으면 사람이 훅을 끈다
+#   너무 넓음(리터럴 조각 0) → deny   면제가 아니라 게이트 끄기다. 받지 않는다
+# **걸러진 면제가 문서·설정 쓰기까지 막으면 안 된다** — 아래 not-source 케이스가 그 경계다.
+head_ "게이트 — 레거시 면제는 기록된 것만 조용히 통과한다"
+P6="$TMP/gate-legacy"; mkproj_ "$P6" yes yes "src/a.ts" yes
+
+setex_() {  # <legacyExempt 의 JSON 값>
+  python3 -c 'import json,sys
+json.dump({"gate":{"legacyExempt":json.loads(sys.argv[2])}},
+          open(sys.argv[1],"w",encoding="utf-8"),ensure_ascii=False)' \
+    "$P6/workflow.config.json" "$1"
+}
+gtn_() {  # <기대 판정> <기대 근거(note)> <경로> <설명>
+  local out rc got
+  out=$(bash "$GT" --path "$3" --root "$P6" --why 2>&1 >/dev/null); rc=$?
+  case "$rc" in 0) got=통과 ;; 2) got=차단 ;; 3) got=확인 ;; *) got="이상($rc)" ;; esac
+  eq_ "$1" "$got" "$4"
+  if printf '%s' "$out" | grep -q "($2)"; then ok_ "$(printf '  └ %-48s %s' 근거 "$2")"
+  else no_ "  └ 근거가 $2 가 아니다" "$out"; fi
+}
+
+setex_ '[]'
+gtn_ 차단 not-declared "legacy/old.ts" "면제 없음이 기본 — 레거시 파일도 막힌다"
+
+setex_ '["legacy/**"]'
+gtn_ 확인 exempt-unrecorded "legacy/old.ts"    "글로브만 적었다 — 막지 않되 매번 묻는다"
+gtn_ 확인 exempt-unrecorded "legacy/deep/x.ts" "  하위도 같다"
+gtn_ 차단 not-declared      "src/b.ts"         "면제 밖은 그대로 막힌다"
+gtn_ 통과 declared-file-map "src/a.ts"         "선언된 경로는 그대로 통과"
+
+setex_ '[{"path":"legacy/**","why":"벤더 배포본","scope":"unmanaged","added":"20260101"}]'
+gtn_ 통과 legacy-exempt "legacy/old.ts" "기록된 unmanaged 면제 — 조용히 통과"
+gtn_ 차단 not-declared  "src/b.ts"      "  면제 밖은 여전히 막힌다"
+
+setex_ '[{"path":"*/thirdparty/**","why":"벤더","scope":"unmanaged"}]'
+gtn_ 통과 legacy-exempt "vendor/thirdparty/x.ts" "중간에 리터럴 조각이 있으면 받는다"
+
+# **글로브도 대상 경로와 같은 규칙으로 정규화한다.** 안 하면 `./legacy/**` 이 아무것에도 안 맞아
+# **조용히 죽은 면제**가 된다 — 사람은 걸었다고 믿는데 계속 막히고, 그러면 훅을 꺼 버린다.
+setex_ '[{"path":"./legacy/**","why":"벤더","scope":"unmanaged"}]'
+gtn_ 통과 legacy-exempt "legacy/old.ts" "./ 접두어 글로브도 산다 (죽은 면제 회귀)"
+setex_ '[{"path":"/legacy/**","why":"벤더","scope":"unmanaged"}]'
+gtn_ 통과 legacy-exempt "legacy/old.ts" "앞 슬래시 글로브도 산다"
+setex_ '[{"path":"legacy/x/../**","why":"벤더","scope":"unmanaged"}]'
+gtn_ 통과 legacy-exempt "legacy/old.ts" "글로브 안의 ../ 도 푼다"
+
+setex_ '[{"why":"벤더","scope":"unmanaged"}]'
+gtn_ 확인 exempt-unrecorded "legacy/old.ts" "path 없는 항목 — 넓이가 아니라 기록 문제로 본다"
+
+setex_ '[{"path":"legacy/**","why":"역추출 전","scope":"legacy","until":"29991231"}]'
+gtn_ 통과 legacy-exempt "legacy/old.ts" "scope=legacy · 만료 전"
+setex_ '[{"path":"legacy/**","why":"역추출 전","scope":"legacy"}]'
+gtn_ 확인 exempt-unrecorded "legacy/old.ts" "scope=legacy 인데 until 이 없다"
+setex_ '[{"path":"legacy/**","why":"역추출 전","scope":"legacy","until":"20000101"}]'
+gtn_ 확인 exempt-expired "legacy/old.ts" "만료된 면제 — 차단이 아니라 다시 묻는다"
+setex_ '[{"path":"legacy/**","why":"x","scope":"forever"}]'
+gtn_ 확인 exempt-unrecorded "legacy/old.ts" "모르는 scope"
+
+# **면제 남용** — 리포 전체·확장자 전체 글로브는 받지 않는다
+for wide in '["**"]' '["*"]' '["**/*"]' '["**/*.ts"]' '["./**"]' \
+            '[{"path":"**","why":"레거시라서","scope":"unmanaged"}]'; do
+  setex_ "$wide"
+  gtn_ 차단 exempt-too-broad "legacy/old.ts" "너무 넓은 면제 $wide 를 무시한다"
+done
+# 넓은 면제가 **소스 아닌 것까지 막으면** 그게 과차단이고 사람이 훅을 끈다
+setex_ '["**"]'
+gtn_ 통과 not-source        "README.md"  "  걸러진 면제가 문서 쓰기를 막지 않는다"
+gtn_ 통과 declared-file-map "src/a.ts"   "  선언된 경로도 막지 않는다"
+gtn_ 통과 spike             "spike/x.ts" "  spike 면제도 그대로다"
+
+# 목록이 아니면 지금 면제가 하나도 안 걸린 것이다 — 조용히 지나가지 않는다
+setex_ '"legacy/**"'
+gtn_ 확인 exempt-not-a-list "legacy/old.ts" "legacyExempt 가 배열이 아니다"
+printf '{"gate":{"legacyExempt":[]}}\n' > "$P6/workflow.config.json"
 
 head_ "게이트 — 판정 근거가 없을 때 (fail-open 도 fail-closed 도 아니다)"
 gtc() {  # <기대> <설명> <FLOW_TOPOLOGY 값>

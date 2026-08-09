@@ -39,7 +39,21 @@
     ]
   },
   "gate": {
-    "$note": "쓰기 게이트의 레거시 면제 — 유닛·경로를 적으면 그 아래는 task 문서 없이 쓸 수 있다. 정본 구조는 플러그인의 flow.topology.json 의 gate.exemptions 다",
+    "$note": [
+      "**쓰기 게이트의 면제 — 비운 채로 내보낸다.** 기본은 면제 없음이다.",
+      "면제는 *이 구역은 flow 가 관리하지 않는다* 는 선언이다. **이번에 고치는 파일을 여는 자리가 아니다** —",
+      "그건 task 문서의 File Map 에 적는다. 둘을 섞으면 게이트가 이름만 남는다.",
+      "항목 형식 — `{ path, why, scope, until, added }`. 정본은 플러그인 flow.topology.json 의",
+      "gate.exemptions 중 legacy-exempt 다(scope 두 가지·만료·넓이 규칙이 거기 있다). 요약:",
+      "  scope unmanaged — 벤더 배포본·생성물·남의 팀 소유. 우리가 안 고친다. 만료 없음",
+      "  scope legacy    — 아직 안 덮은 우리 레거시. until(YYYYMMDD) 이 있어야 한다",
+      "  글로브 문자열만 적어도 받는다. 단 그때는 통과가 아니라 **쓸 때마다 사람에게 묻는다**",
+      "  와일드카드 없는 경로 조각이 없는 글로브(** · **/*.ts)는 무시한다 — 그건 게이트 끄기다",
+      "누가 채우나 — /flow:setup 의 `면제 구역 확정`(기존 코드가 있을 때) · /flow:build 가 막혔을 때 사람 승인 후.",
+      "예시 항목:",
+      "  { \"path\": \"vendor/**\", \"why\": \"벤더 배포본 — 우리가 고치지 않는다\", \"scope\": \"unmanaged\", \"added\": \"20260101\" }",
+      "  { \"path\": \"lib/billing-legacy/**\", \"why\": \"역추출 전 · BILL-0 으로 덮는다\", \"scope\": \"legacy\", \"until\": \"20260630\", \"added\": \"20260101\" }"
+    ],
     "legacyExempt": []
   },
   "review": {
