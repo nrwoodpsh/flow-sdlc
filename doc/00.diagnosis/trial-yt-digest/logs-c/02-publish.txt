@@ -1,0 +1,54 @@
+수집을 마쳤습니다. **발행처가 확보되지 않아 실행 전에 멈춥니다.**
+
+## 대상 선언
+
+```
+[/flow:publish] 대상: doc/01.work/collect/00.quota (유닛 하나)
+           소스: 용어집 + 유닛 문서 9개 (아래)
+           발행처: ✗ 미설정 — workflow.config.json 의 publish.target · notionParent 둘 다 빈 값
+                   ✗ Notion MCP 미인증 (Figma·Microsoft 365 도 동일). Google Drive 만 연결됨
+           갱신/신규: 판정 불가 — 7.summary/ 폴더 자체가 없어 URL 기록 자리가 없다
+           다이어그램: PlantUML 3개 — 발행처가 정해져야 렌더 방식이 정해진다
+           민감정보: 발견 없음
+           → 발행처를 확보하기 전에는 진행할 수 없습니다
+```
+
+## 수집한 것 (`publish/collect.md` 순서)
+
+| 발행 절 | 출처 | 상태 |
+|:--|:--|:--|
+| 용어 | `doc/00.ref/01.domain/00.common.md` | ⚠️ **템플릿 플레이스홀더뿐** — `{{회원(Member)}}`·`{{휴면}}`·`{{소프트 삭제}}`. 이 프로젝트 용어가 하나도 안 채워졌다 |
+| 도메인 | `doc/00.ref/01.domain/collect.md` | ✗ **없음** — 유닛이 고아 요구다(`0.requirement.md:5`) |
+| 시스템 요구·구조 | `doc/00.ref/00.architecture/00.requirement.md` | 유닛 범위라 링크로만 |
+| 요구 | `0.requirement.md` — `COLLECT-QUOTA-1`·`-2` | ✅ |
+| 설계 | `1.design.md` — 근본원인 ②, 설계요소 `D-1`·`D-2`, 결정 7건 | ✅ |
+| 작업 | `2.task/00.quota-counter.md` · `01.fetch-guard.md` | ✅ |
+| 계약 | `3.contract/collect.ts` | ✅ 내부 전용 표기 |
+| 구현 | `4.build/00.md` · `01.md` | ✅ |
+| 검증 | `5.verify/00.md` (Tests 14 passed) · `01.md` (Tests 19 passed, Exit 0) | ✅ |
+| 구현 요약 | `7.summary/` | ✗ **폴더 없음** |
+| 결정 | `doc/02.decisions/01.transcript-sentence-boundary-truncation.20260810.md` | ⚠️ summarizer 자막 절단 건 — 이 유닛과 무관. 유닛 범위 발행에서는 제외가 맞다고 봅니다 |
+
+## 막는 것 셋
+
+**1. 발행처가 없다.** `publish.target`·`notionParent` 가 빈 값이라 어디로 보낼지 정해진 게 없습니다. 게다가 Notion·Figma·Microsoft 365 커넥터는 인증되지 않은 상태이고, **인증은 제가 대신할 수 없습니다** — claude.ai 커넥터 설정에서 직접 연결하셔야 합니다. 지금 붙어 있는 것은 Google Drive 하나입니다.
+
+**2. `/flow:sync` 가 아직 안 돌았다.** topology 상 `publish` 는 `sync` 다음인데, 유닛에 `6.review/`·`7.summary/`·`README.md` 가 없고 `doc/01.work/README.md` 도 "아직 유닛 없음" 상태입니다. `publish/url-record.md` 는 유닛 발행 URL 을 `7.summary/` 회차 파일에 적으라고 하는데 **적을 파일이 없습니다.** 이대로 발행하면 다음 회차가 같은 페이지를 또 만듭니다.
+
+**3. 용어집이 비어 있다.** 가드레일은 "용어 문서를 빼고 발행하지 않는다"인데, 넣어도 받는 사람이 얻는 게 없습니다. `쿼터`·`창(window)`·`수집기` 같은 이 유닛의 용어가 정의되지 않은 채 나갑니다.
+
+## 다이어그램
+
+PlantUML 코드블록 3개 — `0.requirement.md` 유스케이스 1, `1.design.md` 오브젝트 1·시퀀스 1. `doc-template/diagram` 은 Notion·docx·pdf 에서 **코드 텍스트로만 보인다**고 못박고 있습니다. 발행처가 정해지면 그때 이미지 렌더 가능 여부를 확인하고, 안 되면 코드블록으로 남았다는 사실을 결과에 적겠습니다.
+
+## 민감정보
+
+발행 대상(유닛 9개 + 용어집 + ADR)에 크리덴셜·토큰·내부 호스트·IP·개인정보 **0건**. 스캔 히트는 전부 `doc/00.ref/03.templates/` 의 예시(`password_hash`·`reset_token`)와 `00.ref/README.md` 로, 발행 대상이 아닙니다.
+
+## 결정해 주실 것
+
+1. **발행처를 어디로 할까요?** 지정해 주시면 `workflow.config.json` 의 `publish` 절에 저장합니다. Notion 이면 연결부터 필요하고, Google Drive 라면 지금 바로 가능합니다.
+2. **`/flow:sync` 를 먼저 돌릴까요?** 그래야 `7.summary/` 가 생겨 URL 을 남길 자리가 만들어집니다. 안 돌리고 발행하면 다음 발행이 페이지를 중복 생성합니다.
+3. **용어집·ADR 처리** — 용어집을 플레이스홀더 그대로 내보낼지, ADR 01 을 함께 넣을지.
+
+승인 없이는 아무것도 내보내지 않았습니다. 읽기만 했고 파일은 손대지 않았습니다.

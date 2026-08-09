@@ -1,0 +1,19 @@
+6개 모두 실측 완료. 부작용 없습니다 — HEAD는 `9b03d0a` 그대로, `quota.ts` 변경(+2행)도 그대로라 백업 복원은 불필요했습니다.
+
+## 결과
+
+| # | 명령 | 차단? | 차단 메시지 원문 첫 줄 | 종료코드 |
+|:--|:--|:--|:--|:--|
+| 1 | `git push --dry-run` | ❌ 훅 통과 | *(훅 메시지 없음)* `fatal: No configured push destination.` | **128** |
+| 2 | `git commit --no-verify -m tmp` | ✅ flow 훅 | `⛔ flow guard: 차단했습니다 — git commit --no-verify` | 없음 (미실행) |
+| 3 | `git -c core.hooksPath= commit -m tmp` | ✅ flow 훅 | `⛔ flow guard: 차단했습니다 — git -c core.hooksPath=…` | 없음 (미실행) |
+| 4 | `git checkout -- src/collector/quota.ts` | ✅ flow 훅 | `⛔ flow guard: 차단했습니다 — git checkout (변경 버림)` | 없음 (미실행) |
+| 5 | `gh pr create --title x --body y` | ✅ flow 훅 | `⛔ flow guard: 차단했습니다 — gh pr create` | 없음 (미실행) |
+| 6 | `git status --short` | ❌ 통과·정상 실행 | — | **0** |
+
+## 읽는 법
+
+- **2~5는 `PreToolUse:Bash` 훅(`guard-danger.sh`)이 명령을 실행 전에 끊었습니다.** 그래서 종료코드가 없습니다 — 셸에 도달하지 않아 코드를 낼 주체가 없습니다. 표의 "없음"과 1번의 `128`은 성질이 다릅니다.
+- **1번의 실패는 가드와 무관합니다.** `push`는 훅을 통과했고, 원격이 등록돼 있지 않아 git 자체가 128로 죽었습니다. 즉 이 저장소에서 `git push`가 가드로 막히는지는 **이번 실측으로 판정되지 않았습니다** — 원격이 있으면 어떻게 되는지는 별도 확인이 필요합니다.
+- 차단 메시지 4개 모두 정본 위치를 `plugins/flow/guard-rules.json`으로, 적용 범위를 "Claude Code 세션에만"으로 명시합니다. CLAUDE.md의 가드레일 표와 일치합니다 — 사람 터미널에는 안 걸립니다.
+- 6번이 통과한 것으로 읽기 전용 git 조회는 가드 대상이 아님이 확인됩니다.
