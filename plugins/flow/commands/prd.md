@@ -15,9 +15,9 @@ argument-hint: '[sys | domain {도메인} | func {도메인}/{NN.유닛}] [legac
 | 싣는 것 | 무엇 |
 |:--|:--|
 | 스킬 | `traceability`·`usecase`·`doc-template`·`plain-writing`·`default-reference` |
-| 조각 | `traceability/level`·`traceability/id-system`·`traceability/conflict`·`usecase/granularity`·`usecase/rule-level`·`usecase/figure-scope`·`doc-template/diagram`·`doc-template/template-gap` |
+| 조각 | `traceability/level`·`traceability/id-system`·`traceability/conflict`·`traceability/coverage`·`usecase/granularity`·`usecase/rule-level`·`usecase/figure-scope`·`doc-template/diagram`·`doc-template/template-gap`·`default-reference/delegation` |
 
-기존 요구·코드를 넓게 확인할 때는 `explorer` 에 위임한다 — `legacy` 에서는 필수다.
+기존 요구·코드를 넓게 확인할 때는 `explorer` 에 위임한다 — `legacy` 에서는 필수다. 위임 판정은 `default-reference` 의 `delegation` 조각이 정본이다.
 
 ## 진입 조건
 
@@ -69,7 +69,7 @@ argument-hint: '[sys | domain {도메인} | func {도메인}/{NN.유닛}] [legac
 |:--|:--:|:--:|:--:|:--|
 | 목적 | ✓ | ✓ | ✓ | 무엇을 해결합니까? |
 | 목표 | ✓ | | | 이루려는 것이 있습니까? 우리가 못 만드는 것도 |
-| 액터 | | ✓ | ✓ | 누가·무엇이 씁니까? 주 액터와 연동 시스템을 나눠서 |
+| 액터 | | ✓ | ✓ | 누가·무엇이 씁니까? |
 | 기능 | | ✓ | ✓ | 필요한 기능을 나열하면? |
 | 흐름 | | | ✓ | 각 기능이 어떤 순서로 흐릅니까? 예외도 |
 | 사전·사후조건 | | | ✓ | 시작하려면 무엇이 참이어야 하고, 끝나면 무엇이 남습니까? |
@@ -81,7 +81,7 @@ argument-hint: '[sys | domain {도메인} | func {도메인}/{NN.유닛}] [legac
 | 의존 | ✓ | ✓ | ✓ | 먼저 끝나야 하는 게 있습니까? |
 | 범위 밖 | ✓ | ✓ | ✓ | 이번에 하지 않을 것은? — **요구로 등록한 것을 여기 적지 않는다** |
 
-- **추측으로 채우지 않는다.** 모르면 `확인 필요` 로 남긴다.
+- 묻는 순서와 **모르는 칸을 어떻게 두나**는 `usecase` 의 `granularity` 조각이 정본이다.
 - 업무 규칙을 **어느 레벨에 두나**는 `usecase` 의 `rule-level` 조각이 정본이다. 올린 규칙은 번호로만 가리킨다 — 내용을 복사하면 고칠 곳이 둘이 된다.
 
 ### 역추출한다 *(`legacy`)*
@@ -101,8 +101,7 @@ argument-hint: '[sys | domain {도메인} | func {도메인}/{NN.유닛}] [legac
 | 외부 쿼터 대조 | **`현행 — {실제 동작}`** 으로 적는다. 넘는 것 같아도 돌고 있다면 어떻게 넘기는지(재시도·큐)를 적는다 |
 | 측정 수단 설계 요소 | **면제** — 설계 단계가 아니다 |
 
-- **면제 근거는 `상태: 확인 필요` 다.** 사람이 검수해 확정으로 바꾸면 그때부터 신규와 같은 게이트가 걸린다.
-- **`확인 필요` 를 게이트 우회용으로 쓰지 않는다** — 신규 요구를 그렇게 적으면 `gatekeeper` 가 판정에 적는다.
+- **면제 근거는 `상태: 확인 필요` 다.** 그 값의 뜻·검수 뒤 처리·오용 금지는 `traceability` 의 `coverage` 조각이 정본이다.
 - **`func legacy` 는 유닛을 새로 만들지 않는다.** 레거시 코드에는 work-unit 경계가 없어 번호를 지어내야 하는데, 지어낸 번호는 나중에 실제 작업 단위와 어긋난다. 유닛이 있으면 그 요구 문서에 현행 동작을 append 하고, 없으면 **거부하고 `domain legacy` 를 안내**한다.
 - **표를 새로 만들지 않는다** — 템플릿의 요구 표에 행을 더하고 `상태` 를 `확인 필요` 로 적는다.
 

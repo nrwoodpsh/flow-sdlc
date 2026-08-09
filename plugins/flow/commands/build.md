@@ -19,6 +19,7 @@ v1 은 `build` 와 `verify unit` 을 갈라 뒀지만 build 루프가 이미 단
 | 스킬 | `traceability` · `testing` · `contract-gate` · `code-review` · `doc-template` · `plain-writing` · `default-reference` |
 | 조각 | `traceability/tagging` · `traceability/unit-state` · `testing/run` · `testing/case-source` · `contract-gate/failure` · `code-review/checklist` · `default-reference/delegation` |
 | 조건부 — **기존 코드를 고칠 때만** | `impact-analysis` · `impact-analysis/regression-surface` · `code-graph` · `code-graph/query` |
+| 조건부 — **계약을 건드리거나 MSA 일 때만** | `code-graph/service-boundary` |
 | 조건부 — **task 문서를 고칠 때만** | `doc-template/task-doc` |
 | 조건부 — **LLM 기능일 때만** | `testing/llm-cost` |
 | 에이전트 | `builder`(구현 — **쓰기 권한은 여기 하나**) · `verifier`(실행 판정) · `gatekeeper`(진입 내용 판정) · `explorer`(넓게 읽을 때) |
@@ -61,7 +62,7 @@ v1 은 `build` 와 `verify unit` 을 갈라 뒀지만 build 루프가 이미 단
 **상태는 파일에서 계산한다.** README 의 `상태` 는 캐시라 낡을 수 있다 — 믿지 않는다.
 
 - 남은 task 가 여럿이면 계산한 진행(구현·검증)을 함께 보여주고 이어갈 자리를 지목한다.
-- **번호가 빠져 있으면 알린다**(`00`·`02` 만 있고 `01` 없음) — 스파인이 깨졌다는 뜻이다.
+- **번호가 빠졌는지 함께 본다** — 무엇을 세고 무엇을 알리나는 `traceability` 의 `unit-state` 조각이 정본이다.
 - **계산한 상태가 README 와 다르면 알리고 `/flow:sync` 를 권한다.** 여기서 README 를 고치지 않는다.
 
 **사전 게이트** — `contract-gate` 로 계약을 컴파일한다. 실패 원인이 계약인지 환경인지는 `contract-gate/failure` 가 정본이다. **`build` 가 계약의 뜻을 바꾸지 않는다** — 그 계약을 쓰는 다른 task 가 조용히 깨진다. 모르겠으면 멈춘다.

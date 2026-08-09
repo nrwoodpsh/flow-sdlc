@@ -259,6 +259,70 @@ def _wired(enforced):
     }
 
 
+def _agent(name, tools):
+    return {f'plugins/flow/agents/{name}.md':
+            f"---\nname: {name}\ndescription: {name} 다\ntools: {tools}\n---\n\n# {name}\n"}
+
+
+def _judge(who, judges=('gatekeeper',)):
+    """`entry.content` 의 판정자 하나 + 판정자 정본 선언 + 에이전트 둘."""
+    files = {TOPO_REL: json.dumps(
+        {'version': 1,
+         'grades': {'content': {'누가 판정하나': 'gatekeeper', 'judges': list(judges)}},
+         'skills': {},
+         'commands': {'review': {
+             'order': 1, 'phase': '리뷰', 'after': [], 'next': [],
+             'entry': {'machine': [],
+                       'content': [{'id': 'finding-severity', 'what': '발견의 등급',
+                                    'who': who}],
+                       'promise': []},
+             'loads': None, 'procedures': None}}},
+        ensure_ascii=False, indent=2)}
+    files.update(_agent('gatekeeper', 'Read, Grep, Glob'))
+    files.update(_agent('reviewer', 'Read, Grep, Glob, Bash'))
+    return files
+
+
+def _skill_router(name, frag, body='규약은 조각에 있다.'):
+    """`어느 조각을 읽나` 표를 가진 스킬 + 그 조각."""
+    return {
+        f'plugins/flow/skills/{name}/SKILL.md':
+            f"---\nname: {name}\n---\n\n# {name}\n\n{body}\n\n## 어느 조각을 읽나\n\n"
+            f"| 이 상황이면 | 반드시 읽는다 |\n|:--|:--|\n"
+            f"| 그 상황이면 | `references/{frag}.md` |\n",
+        f'plugins/flow/skills/{name}/references/{frag}.md':
+            f"# {frag}\n\n규약 본문이다.\n",
+    }
+
+
+def _wiring(loads, name='build', procedures=(), body=''):
+    files = {TOPO_REL: json.dumps(
+        {'version': 1,
+         'skills': {'code-graph': {'fragments': ['query', 'service-boundary']}},
+         'commands': {name: {'order': 1, 'phase': '구현', 'after': [], 'next': [],
+                             'entry': {'machine': [], 'content': [], 'promise': []},
+                             'loads': loads, 'procedures': list(procedures)}}},
+        ensure_ascii=False, indent=2)}
+    files.update(_skill_router('code-graph', 'service-boundary'))
+    files[f'plugins/flow/skills/code-graph/references/query.md'] = "# query\n\n질의다.\n"
+    files[f'plugins/flow/commands/{name}.md'] = (
+        f"---\nname: {name}\n---\n\n# {name}\n\n{body}\n")
+    return files
+
+
+def _dup(copy):
+    """조각(규약)과 커맨드(지시). `copy=True` 면 커맨드가 규약 문장을 그대로 옮겼다."""
+    canon = "- **`확인 필요` 를 게이트 우회용으로 쓰지 않는다** — 신규 요구를 그렇게 적으면 판정에 남는다\n"
+    line = canon if copy else \
+        "- 면제 근거인 `확인 필요` 의 뜻은 `traceability` 의 `coverage` 조각이 정본이다\n"
+    return {
+        'plugins/flow/skills/traceability/references/coverage.md':
+            f"# 커버리지\n\n상태 값으로 판정한다.\n\n{canon}",
+        'plugins/flow/commands/prd.md':
+            f"---\nname: prd\n---\n\n# prd\n\n요구를 등록한다.\n\n{line}",
+    }
+
+
 def _grade_doc(label):
     """topology 는 `promise` 하나뿐인데 커맨드 본문이 `label` 등급이라 적는다."""
     return {
@@ -274,6 +338,39 @@ def _grade_doc(label):
             f"- **{label}** — `source-changed`. git diff 가 비었으면 할 것이 없다.\n\n"
             "## 경계\n\n끝.\n"),
     }
+
+
+def _tracked(swallow):
+    """진짜 git repo 를 만드는 픽스처 — 이 검사만 디스크가 아니라 git 을 본다.
+
+    `swallow=True` 면 전역 gitignore 가 `build/` 를 삼킨 상태를 재현한다:
+    파일은 디스크에 있고 git 에는 없다. 다른 검사는 전부 통과하는 상태다.
+    """
+    def build(root):
+        import subprocess
+        run = lambda *a: subprocess.run(['git', '-C', root, *a],
+                                        capture_output=True, text=True)
+        files = {
+            'plugins/flow/commands/build.md':
+                "---\nname: build\n---\n\n# build\n\n구현한다.\n",
+            'plugins/flow/procedures/build/unit-verify.md': "# 단위 검증\n\n돌린다.\n",
+        }
+        for rel, body in files.items():
+            fp = os.path.join(root, rel)
+            os.makedirs(os.path.dirname(fp), exist_ok=True)
+            with open(fp, 'w', encoding='utf-8') as fh:
+                fh.write(body)
+        # **디렉터리가 제외되면 git 이 그 안으로 안 내려간다** — 파일만 되살리는 한 줄로는
+        # 안 되고 디렉터리도 함께 되살려야 한다. 이 픽스처가 그 함정을 실제로 잡았다.
+        revive = ('!plugins/flow/procedures/build/\n'
+                  '!plugins/flow/procedures/build/*.md\n')
+        with open(os.path.join(root, '.gitignore'), 'w', encoding='utf-8') as fh:
+            fh.write('build/\n' + ('' if swallow else revive))
+        run('init', '-q')
+        run('config', 'user.email', 'test@flow.local')
+        run('config', 'user.name', 'flow test')
+        run('add', '-A')
+    return build
 
 
 CASES = {
@@ -381,28 +478,45 @@ CASES = {
         _graded('호출-전용', '요구 ID 체계의 정본. /flow:prd 가 쓴다.', loads_skills=()),
     ),
 
-    # ── 스킬 간 중복 ──
+    # ── 규약 사본 ──
+    # **조각과 커맨드가 대상에 들어왔는지까지 본다.** 픽스처에 `SKILL.md` 가 없다 —
+    # 대상이 `ctx.skills()` 로 되돌아가면 통과 픽스처가 **대상 0건**이 되어 테스트가 실패한다.
     'skill-duplication': (
-        {**_skill('traceability',
-                  "요구 ID 를 발급하고 추적한다.\n\n"
-                  "## 판정\n\n"
-                  "- 요구 ID 는 발급한 순서대로 붙이고 지운 번호는 다시 쓰지 않는다\n\n"
-                  "## 경계\n\n코드를 고치지 않는다.\n"),
-         **_skill('testing',
-                  "테스트를 돌려 판정한다.\n\n"
-                  "## 판정\n\n"
-                  "- 테스트는 실제로 실행해 exit code 로 통과를 확인한다 추론은 검증이 아니다\n\n"
-                  "## 경계\n\n구현을 고치지 않는다.\n")},
-        {**_skill('traceability',
-                  "요구 ID 를 발급하고 추적한다.\n\n"
-                  "## 판정\n\n"
-                  "- 요구 ID 는 발급한 순서대로 붙이고 지운 번호는 다시 쓰지 않는다\n\n"
-                  "## 경계\n\n코드를 고치지 않는다.\n"),
-         **_skill('testing',
-                  "테스트를 돌려 판정한다.\n\n"
-                  "## 판정\n\n"
-                  "- 요구 ID 는 발급한 순서대로 붙이고 지운 번호는 다시 쓰지 않는다\n\n"
-                  "## 경계\n\n구현을 고치지 않는다.\n")},
+        _dup(copy=False),
+        # 커맨드가 조각의 규약 문장을 그대로 옮겼다 = 정본이 둘 (W2 `prd` ↔ `coverage`)
+        _dup(copy=True),
+    ),
+
+    # ── entry.content 판정자 독립성 ──
+    'gate-judge-independence': (
+        _judge('gatekeeper'),
+        # 발견을 만드는 `reviewer` 가 자기 발견의 등급을 판정한다 (재설계 D3)
+        _judge('reviewer'),
+    ),
+
+    # ── 조건부로 실은 스킬의 반드시 조각 ──
+    'fragment-load-wired': (
+        _wiring({'conditional_skills': {'code-graph': '계약을 건드릴 때만'},
+                 'conditional': {'code-graph/service-boundary': '계약을 건드릴 때만'}}),
+        # 조건부로 싣는데 표가 반드시 읽으라 한 조각이 없다 = 그 상황에서 반쪽만 읽는다 (D4)
+        _wiring({'conditional_skills': {'code-graph': '계약을 건드릴 때만'},
+                 'conditional': {'code-graph/query': '계약을 건드릴 때만'}}),
+    ),
+
+    # ── 이름만 실린 스킬 ──
+    'skill-loaded-body-only': (
+        _wiring({'skills': ['code-graph'], 'fragments': ['code-graph/service-boundary']}),
+        # 라우터만 싣고 조각을 하나도 안 싣는다 = 규약이 안 읽힌다
+        _wiring({'skills': ['code-graph'], 'fragments': []}),
+    ),
+
+    # ── 읽으라 한 조각이 배선됐나 ──
+    'read-order-wired': (
+        _wiring({'skills': ['code-graph'], 'fragments': ['code-graph/service-boundary']},
+                body="계약 범위는 `code-graph` 의 `service-boundary` 조각을 읽는다.\n"),
+        # 읽으라 지시했는데 `loads` 에 없다 = 그 자리에서 읽을 수 없는 지시다
+        _wiring({'skills': ['code-graph'], 'fragments': ['code-graph/query']},
+                body="계약 범위는 `code-graph` 의 `service-boundary` 조각을 읽는다.\n"),
     ),
 
     # ── 절 이름 번호·라벨 금지 ──
@@ -487,6 +601,14 @@ CASES = {
         # 뜻을 안 더하는 강조 — `plain-writing` 이 금한다
         {'plugins/flow/commands/build.md':
             "---\nname: build\n---\n\n# build\n\n매우 강력한 방식으로 구현한다.\n"},
+    ),
+
+    # ── 배포 파일이 git 에 있나 ──
+    # 픽스처가 **진짜 git repo 를 만든다.** 이 검사만 디스크가 아니라 git 을 보기 때문이다.
+    'plugin-files-tracked': (
+        _tracked(swallow=False),
+        # 전역 gitignore 의 `build/` 가 절차 조각을 삼킨 상태 — 디스크엔 있고 git 엔 없다
+        _tracked(swallow=True),
     ),
 }
 

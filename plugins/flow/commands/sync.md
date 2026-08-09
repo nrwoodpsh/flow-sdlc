@@ -15,7 +15,7 @@ argument-hint: '[도메인 (선택 — 없으면 git diff 에서 자동 분류)]
 | 무엇 | 이름 |
 |:--|:--|
 | 스킬 | `traceability` · `drift-check` · `doc-verify` · `contract-gate` · `plain-writing` · `default-reference` |
-| 조각 | `traceability/tagging` · `traceability/unit-state` · `traceability/coverage` · `traceability/conflict` · `doc-verify/canon-map` · `contract-gate/failure` · `default-reference/delegation` |
+| 조각 | `traceability/tagging` · `traceability/unit-state` · `traceability/coverage` · `traceability/conflict` · `drift-check/rule` · `doc-verify/canon-map` · `contract-gate/failure` · `default-reference/delegation` |
 | 에이전트 | `explorer`(diff 가 크거나 유닛이 여럿일 때 — 원문을 메인으로 끌어오지 않는다) |
 | 절차 조각 | `${CLAUDE_PLUGIN_ROOT}/procedures/sync/index.md` |
 

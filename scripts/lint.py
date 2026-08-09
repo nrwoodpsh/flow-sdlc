@@ -560,9 +560,20 @@ def _output_required(ctx):
     return r
 
 
-# ── 스킬 간 중복 ──
+# ── 규약 사본 ──
 # 정본이 둘이 되면 한쪽만 고쳐진다. 이걸 기계로 지키는 유일한 장치다(diag-C 1절 · v1 검사 11).
+#
+# **대상을 넓혔다.** v1·v2 초판은 `SKILL.md` 14개만 돌았다(`ctx.skills()`). v2 는 규약 내용을
+# `references/` 조각으로 내렸으므로 그 14개는 대부분 라우터고, **조각 35개(약 1,900줄, 이 층의
+# 82%)와 커맨드·절차 본문이 검사 밖**이었다 — 사본은 거기 살아 있다(재설계 D6 · W2 `중복과 공백`).
+#
+# **지시 층끼리는 대조하지 않는다.** 커맨드·절차 본문은 커맨드마다 자기 게이트·경계를 선언해야
+# 해서 같은 문장이 겹치는 것이 정상이다(`내용 — 없다…` 가 네 커맨드에 있다). 게다가 둘 다 정본을
+# **이름으로 가리키는** 정상 인용까지 사본으로 잡힌다(`publish` ↔ `verify` 의 위임 인용이 실측 예다).
+# 잡아야 하는 것은 **규약(스킬 본체·조각)이 두 곳에 사는 것**과 **지시 층이 규약을 베낀 것**이다.
 DUP_RATIO = 0.85
+DUP_CANON = ('plugins/flow/skills/*/SKILL.md', 'plugins/flow/skills/*/references/*.md')
+DUP_INSTRUCTION = ('plugins/flow/commands/*.md', 'plugins/flow/procedures/*/*.md')
 
 
 def _outside(ctx, p):
@@ -576,30 +587,36 @@ def _outside(ctx, p):
     return out
 
 
-@check('skill-duplication', '스킬 간 중복',
+def _nz(s):
+    return re.sub(r'[^가-힣a-zA-Z0-9]', '', s)
+
+
+@check('skill-duplication', '규약 사본 (스킬·조각·커맨드)',
        '정본이 둘이 되면 한쪽만 고쳐진다 (diag-C 1절 · v1 검사 11 · SequenceMatcher ≥ 0.85)')
 def _skill_duplication(ctx):
-    r = Result(unit='스킬')
+    r = Result(unit='문서')
+    canon = set(ctx.paths(*DUP_CANON))
     src = {}
-    for p in ctx.skills():
-        n = os.path.basename(os.path.dirname(p))
-        lines = [re.sub(r'\s+', ' ', re.sub(r'[`*|]', '', l).strip(' -'))
-                 for _, l in _outside(ctx, p)
+    for p in sorted(canon | set(ctx.paths(*DUP_INSTRUCTION))):
+        lines = [(i, _nz(re.sub(r'\s+', ' ', re.sub(r'[`*|]', '', l).strip(' -'))))
+                 for i, l in _outside(ctx, p)
                  if l.strip().startswith(('- ', '| ')) and len(l.strip()) > 34]
         if lines:
-            src[n] = lines
+            src[p] = lines
             r.targets += 1
-
-    def nz(s):
-        return re.sub(r'[^가-힣a-zA-Z0-9]', '', s)
 
     keys = sorted(src)
     for i, a in enumerate(keys):
         for b in keys[i + 1:]:
-            for x in src[a]:
-                for y in src[b]:
-                    if SequenceMatcher(None, nz(x), nz(y)).ratio() >= DUP_RATIO:
-                        r.fail(f"스킬 간 중복 [{a}]↔[{b}] — {x[:52]} "
+            if a not in canon and b not in canon:
+                continue                       # 지시 층끼리는 대조하지 않는다 (위 주석)
+            for ia, x in src[a]:
+                for ib, y in src[b]:
+                    # 길이만으로 상한이 정해진다 — ratio ≤ 2·min/(len+len)
+                    if 2 * min(len(x), len(y)) < DUP_RATIO * (len(x) + len(y)):
+                        continue
+                    if SequenceMatcher(None, x, y).ratio() >= DUP_RATIO:
+                        r.fail(f"규약 사본 {ctx.rel(a)}:{ia} ↔ {ctx.rel(b)}:{ib} — {x[:44]} "
                                f"(정본 하나를 정하고 다른 쪽은 이름으로 가리킨다)")
     return r
 
@@ -949,6 +966,240 @@ def _gatekeeper_delegation(ctx):
             r.fail(f"위임 지시 없음 {ctx.rel(p)} — `entry.content`({ids}) 가 있는데 "
                    f"`gatekeeper` 를 부르라는 지시가 본문에 없다 "
                    f"(약속만 남으면 게이트가 이름만 있는 것이다)")
+    return r
+
+
+# ── entry.content 의 판정자가 진행하는 쪽인가 ──
+# `gatekeeper-delegation` 은 content 가 **있나** 와 부르라는 지시가 **있나** 만 본다.
+# 그래서 `who` 가 무엇이든 통과한다 — 실제로 `review` 의 `finding-severity` 가 `who=reviewer`
+# 였다. **발견을 만든 쪽이 자기 발견의 severity 를 판정한다**(재설계 D3).
+# `00.concept.md` 의 능력 2(판정 독립성)와 `01.architecture.md` 의 `자기 검증 금지` 가 그 원칙이다.
+#
+# **어느 `who` 가 허용인가 — 근거.** 현 5건 중 4건이 `gatekeeper` 고 하나만 달랐다.
+# 허용 목록을 이 스크립트에 손으로 열거하지 않는다(v1 의 화이트리스트 22개가 그렇게 사문화됐다).
+# 정본은 `flow.topology.json` 의 `grades.content.judges` 다 — 그 등급의 뜻을 적어 둔 바로 그 자리다.
+#
+# **선언만으로는 못 막는다.** 데이터라 누구든 늘릴 수 있으니 `machine` 이 `enforcedBy` 로
+# 배선을 증명하듯, 판정자는 **도구 권한으로 증명한다.** 산출 도구(`Write`·`Edit`·`Bash`)를 가진
+# 에이전트는 만들거나 돌리는 쪽이라 판정자가 될 수 없다 —
+# `agents/gatekeeper.md` 가 *"`Bash` 가 없는 것은 의도다. 도구를 돌리는 쪽(`verifier`·`reviewer`)과
+# 그 결과를 의심하는 쪽을 가른다"* 라고 스스로 적은 그 경계다.
+#
+# **못 잡는 것** — 쓰기·실행 도구가 없는 `explorer` 는 도구 축으로는 판정자와 구별되지 않는다.
+# 그건 `judges` 에 적히지 않는 것으로만 막힌다(선언 축). 두 축 다 통과해야 판정자다.
+PRODUCING_TOOLS = ('Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash')
+
+
+def _agent_tools(ctx):
+    """에이전트 이름 → frontmatter `tools` 목록. 파일이 없으면 키도 없다."""
+    out = {}
+    for p in ctx.paths('plugins/flow/agents/*.md'):
+        m = re.search(r'^tools:\s*(.+)$', ctx.read(p), re.M)
+        out[os.path.basename(p)[:-3]] = [x.strip() for x in (m.group(1) if m else '').split(',')
+                                         if x.strip()]
+    return out
+
+
+@check('gate-judge-independence', 'entry.content 판정자 ↔ 진행하는 쪽',
+       '발견을 만든 쪽이 자기 발견을 판정하는 것 (재설계 D3 · 능력 2 · 자기 검증 금지)')
+def _gate_judge_independence(ctx):
+    r = Result(unit='내용 조건')
+    t = _topo(ctx)
+    if not t:
+        return r
+    judges = ((t.get('grades') or {}).get('content') or {}).get('judges')
+    judges = judges if isinstance(judges, list) else []
+    tools = _agent_tools(ctx)
+
+    # 선언 자체를 먼저 본다 — 판정자가 도구로 증명되지 않으면 목록이 늘어나기만 한다
+    for who in judges:
+        r.targets += 1
+        if who not in tools:
+            r.fail(f"없는 판정자 — `grades.content.judges` 의 `{who}` 에이전트가 없다 "
+                   f"(`plugins/flow/agents/{who}.md` 가 없다)")
+            continue
+        bad = [x for x in tools[who] if x in PRODUCING_TOOLS]
+        if bad:
+            r.fail(f"판정자가 산출 도구를 갖는다 — `{who}` 의 `tools` 에 "
+                   f"{' · '.join(bad)} 가 있다 (만들거나 돌리는 쪽은 자기 산출을 판정할 수 없다. "
+                   f"판정자 선언을 지우거나 도구를 뗀다)")
+
+    for name, c in (t.get('commands') or {}).items():
+        for item in ((c or {}).get('entry') or {}).get('content') or []:
+            r.targets += 1
+            iid = (item or {}).get('id')
+            who = (item or {}).get('who')
+            if not who:
+                r.fail(f"판정자 없음 — commands.{name}.entry.content `{iid}` 에 `who` 가 없다 "
+                       f"(안 적으면 진행하는 커맨드가 자기 조건을 판정한다 = 게이트가 없다)")
+            elif who not in tools:
+                r.fail(f"없는 판정자 — commands.{name}.entry.content `{iid}` 의 "
+                       f"`who: {who}` 에이전트가 없다")
+            elif who not in judges:
+                r.fail(f"판정 독립성 위반 — commands.{name}.entry.content `{iid}` 의 판정자가 "
+                       f"`{who}` 다. 그 국면을 진행하는 쪽이라 자기 산출을 자기가 판정한다 "
+                       f"(판정자 정본은 `grades.content.judges` — 늘리려면 도구 권한으로 증명한다)")
+    return r
+
+
+# ── SKILL.md 가 "반드시 읽는다" 한 조각이 실제로 배선됐나 ──
+# `fragment-reference-exists` 는 가리킨 조각이 **실존하나** 만 본다. 실존하는데 아무도 안 실으면
+# 그 지시는 죽은 지시다 — `code-graph/SKILL.md:27` 이 계약·MSA 면 `service-boundary` 를 반드시
+# 읽으라 하는데 `build`·`design` 의 `loads` 에 없었다. `build.md` 는 *"조각은 여기 적힌 것만
+# 읽는다"* 라 못 박으므로 어긋남이 아니라 **정면 충돌**이고, MSA 레거시에서 "영향 없음" 오보가 난다.
+#
+# **표 전체를 요구하지 않는다.** 스킬 하나가 조각 일곱을 갖기도 하는데 싣는 커맨드마다 전부
+# 요구하면 컨텍스트 예산(능력 6)이 무너진다. 조각 고르기는 커맨드의 권한이다.
+# 그래서 **고르기라는 변명이 성립하지 않는 세 자리만** 본다.
+#
+#   ① 조건부로 실은 스킬 — 그 상황일 때만 읽으므로 예산 논거가 없다. 상황이 오면 표가 정본이다
+#   ② 본체만 실은 스킬 — v2 는 SKILL.md 가 라우터고 내용이 조각에 있다. 조각을 하나도 안 실으면
+#      그 스킬은 **이름만** 실린 것이다. 일부러 그런 것이면 `skills.<이름>.bodyOnly` 로 적는다
+#   ③ 커맨드가 직접 읽는 문서(본문·절차 조각)가 **읽으라고 지시한** 조각 — 인용이 아니라 지시다
+#
+# **셋을 한 검사에 넣지 않는다.** `lint.test.py` 는 **검사 id 마다** 픽스처 한 쌍을 요구한다 —
+# 셋을 묶으면 위반 픽스처가 하나만 건드려도 통과라, 나머지 둘이 사문화돼도 테스트가 못 잡는다.
+# 표 렌더 검사를 넷으로 가른 것과 같은 이유다.
+FRAG_CELL = re.compile(r'`(?:([a-z][a-z0-9-]*)/)?references/([a-z0-9-]+)\.md`')
+FRAG_NAMED = (re.compile(r'`([a-z][a-z0-9-]*)/(?:references/)?([a-z0-9-]+)(?:\.md)?`'),
+              re.compile(r'`([a-z][a-z0-9-]*)`\s*의\s*`([a-z0-9-]+)`'))
+READ_ORDER = re.compile(r'읽는다|읽어라|읽고')
+
+
+def _must_read(ctx):
+    """스킬 → 그 SKILL.md 의 `어느 조각을 읽나` 표가 지시한 조각 [(조각, 줄)]."""
+    out = {}
+    for p in ctx.skills():
+        s = os.path.basename(os.path.dirname(p))
+        got, inside = [], False
+        for i, l in enumerate(ctx.lines(p), 1):
+            if l.startswith('## '):
+                inside = l[3:].strip() == '어느 조각을 읽나'
+                continue
+            if not inside or not l.startswith('|') or SEP.match(l):
+                continue
+            cells = l.strip('|').split('|')
+            if len(cells) < 2 or '반드시 읽는다' in cells[1]:
+                continue                       # 머리글 행
+            for m in FRAG_CELL.finditer(cells[1]):
+                got.append((f"{m.group(1) or s}/{m.group(2)}", i))
+        if got:
+            out[s] = got
+    return out
+
+
+def _load_rows_of(ctx, t):
+    """커맨드 → [(모드, 늘 싣는 것 ∪ 조건부, 조건부만)] — 세 검사가 같은 창구를 쓴다."""
+    out = {}
+    for name, c in (t.get('commands') or {}).items():
+        rows = _loads_rows((c or {}).get('loads'))
+        if rows:
+            out[name] = [(m, set(a) | set(cd), set(cd)) for m, a, cd in rows]
+    return out
+
+
+@check('fragment-load-wired', '조건부로 실은 스킬의 반드시 조각',
+       '조건부 적재가 표의 조각을 골라 실어 그 상황에서 반쪽만 읽는 것 — MSA 오보 경로 (D4)')
+def _fragment_load_wired(ctx):
+    # ① 조건부 적재에는 **예산 논거가 없다.** 그 상황일 때만 실리므로, 상황이 왔을 때 읽을 것을
+    # 고를 이유가 없다. 그래서 여기서는 표를 그대로 요구한다.
+    r = Result(unit='배선 요구')
+    t = _topo(ctx)
+    if not t:
+        return r
+    must = _must_read(ctx)
+    for name, rows in _load_rows_of(ctx, t).items():
+        for mode, have, cond in rows:
+            tag = f"[{mode}] " if mode else ''
+            for s in sorted(x for x in cond if '/' not in x):
+                for frag, ln in must.get(s, []):
+                    r.targets += 1
+                    if frag not in have:
+                        r.fail(f"조건부 배선 누락 commands.{name} — {tag}`{s}` 를 조건부로 "
+                               f"싣는데 `{frag}` 가 없다 (SKILL.md:{ln} 이 그 상황이면 반드시 "
+                               f"읽으라 한다. 조건부는 그 상황일 때만 실리니 예산 이유로 뺄 수 없다)")
+    return r
+
+
+@check('skill-loaded-body-only', '이름만 실린 스킬',
+       '조각을 하나도 안 싣고 라우터만 실어 규약이 안 읽히는 것 (W2 `배선이 끊긴 자리`)')
+def _skill_loaded_body_only(ctx):
+    # ② v2 는 규약을 조각으로 내렸다 — `SKILL.md` 는 대부분 **어느 조각을 읽나** 를 정하는 라우터다.
+    # 조각을 하나도 안 싣고 스킬만 실으면 그 자리에서 읽히는 것은 라우팅표뿐이다.
+    # **일부러 그렇게 하는 자리가 있다**(`theme-apply` 는 설계 국면에 토큰 정본 한 줄만 준다) —
+    # 그건 `skills.<이름>.bodyOnly` 로 적고 `$bodyOnly-why` 로 왜인지 남긴다. 안 적으면 빠뜨린 것과
+    # 구별되지 않는다.
+    r = Result(unit='스킬 적재')
+    t = _topo(ctx)
+    if not t:
+        return r
+    must = _must_read(ctx)
+    meta = t.get('skills') or {}
+    for name, rows in _load_rows_of(ctx, t).items():
+        for mode, have, _ in rows:
+            tag = f"[{mode}] " if mode else ''
+            for s in sorted(x for x in have if '/' not in x):
+                if s not in must:
+                    continue
+                r.targets += 1
+                if (meta.get(s) or {}).get('bodyOnly'):
+                    if not (meta.get(s) or {}).get('$bodyOnly-why'):
+                        r.fail(f"본체만 싣는 이유가 없다 — skills.{s}.bodyOnly 에 "
+                               f"`$bodyOnly-why` 가 없다 (왜 조각이 필요 없는지 못 적으면 "
+                               f"빠뜨린 것과 구별되지 않는다)")
+                    continue
+                if not any(f in have for f, _ in must[s]):
+                    r.fail(f"이름만 실린 스킬 commands.{name} — {tag}`{s}` 를 싣는데 그 조각을 "
+                           f"하나도 안 싣는다 (내용은 {_names([f for f, _ in must[s]])} 에 있다. "
+                           f"SKILL.md 는 라우터다 — 일부러 본체만 싣는 것이면 "
+                           f"`skills.{s}.bodyOnly` 로 적는다)")
+    return r
+
+
+@check('read-order-wired', '읽으라 한 조각이 배선됐나',
+       '커맨드·절차가 읽으라 지시한 조각이 loads 에 없어 읽을 수 없는 것 (D4 · W2)')
+def _read_order_wired(ctx):
+    # ③ 커맨드 본문과 그 커맨드의 절차 조각은 **커맨드가 실제로 읽는 문서**다. 거기서 어떤 조각을
+    # 읽으라고 지시했는데 `loads` 에 없으면 그 자리에서는 읽을 수 없다.
+    #
+    # **인용과 지시를 가른다.** 같은 줄에 `읽는다`·`읽어라`·`읽고` 가 있어야 지시로 본다 —
+    # *"그 사실은 `drift-check/rule` 에도 적혀 있다"* 같은 인용까지 배선을 요구하면 커맨드가
+    # 남의 조각을 다 싣게 된다. 놓치는 쪽으로 틀린다.
+    #
+    # **모드로 가르지 않는다.** 어느 모드가 어느 절차를 읽나는 데이터에 없다. 한 모드라도 실으면
+    # 통과다 — 여기서 엄격하면 없는 근거로 배선을 발명하게 된다.
+    r = Result(unit='읽기 지시')
+    t = _topo(ctx)
+    if not t:
+        return r
+    frags = {f"{s}/{f}" for s, v in (t.get('skills') or {}).items()
+             for f in ((v or {}).get('fragments') or [])}
+    rows_of = _load_rows_of(ctx, t)
+    for name, c in (t.get('commands') or {}).items():
+        everywhere = set()
+        for _, have, _c in rows_of.get(name, []):
+            everywhere |= have
+        reads = [os.path.join(ctx.root, f'plugins/flow/commands/{name}.md')]
+        reads += [os.path.join(ctx.root, f'plugins/flow/procedures/{x}.md')
+                  for x in ((c or {}).get('procedures') or [])]
+        for p in reads:
+            if not os.path.isfile(p):
+                continue
+            for i, l in enumerate(ctx.lines(p), 1):
+                if not READ_ORDER.search(l):
+                    continue
+                seen = set()
+                for pat in FRAG_NAMED:
+                    for m in pat.finditer(l):
+                        frag = f"{m.group(1)}/{m.group(2)}"
+                        if frag not in frags or frag in seen:
+                            continue
+                        seen.add(frag)
+                        r.targets += 1
+                        if frag not in everywhere:
+                            r.fail(f"읽으라 한 조각이 배선에 없다 {ctx.rel(p)}:{i} — "
+                                   f"`{frag}` 를 읽으라 하는데 `commands.{name}.loads` 에 없다 "
+                                   f"(읽을 수 없는 지시다 — 배선에 넣거나 지시를 내린다)")
     return r
 
 
@@ -1456,6 +1707,47 @@ def _fluff(ctx):
             if m:
                 r.fail(f"미사여구 {rel}:{i} — `{m.group(1)}` "
                        f"(`plain-writing` — 뜻을 안 더하면 지운다)")
+    return r
+
+
+# ── 배포되는 것과 git 에 있는 것 ──
+# **다른 검사는 전부 디스크를 본다.** 그래서 디스크엔 있고 git 엔 없는 파일을 아무도 못 잡는다 —
+# 검사기는 초록인데 **배포본에서만 사라진다.** 실제로 그랬다:
+# 사용자 전역 `~/.gitignore_global` 의 `build/` 가 `procedures/build/` 조각 둘을 삼켰고,
+# `fragment-reference-exists`·`command-loads-parity` 는 디스크를 보므로 통과했다.
+# v1 도 같은 형태로 `project-template/.claude/` 를 잃을 뻔했다(`.gitignore` 의 되살리기 규칙).
+@check('plugin-files-tracked', '배포 파일이 git 에 있나',
+       '전역 gitignore 가 삼키면 검사기는 통과하는데 배포본에서 사라진다')
+def _plugin_files_tracked(ctx):
+    import subprocess
+    r = Result(unit='파일')
+    root = ctx.root
+    if not os.path.isdir(os.path.join(root, '.git')):
+        return r                      # git repo 가 아니면 판정할 것이 없다
+    try:
+        out = subprocess.run(['git', '-C', root, 'ls-files', '--cached', '--others',
+                              '--exclude-standard', 'plugins'],
+                             capture_output=True, text=True, timeout=30)
+        listed = {l for l in out.stdout.split('\n') if l.strip()}
+        cached = subprocess.run(['git', '-C', root, 'ls-files', '--cached', 'plugins'],
+                                capture_output=True, text=True, timeout=30)
+        tracked = {l for l in cached.stdout.split('\n') if l.strip()}
+    except (OSError, subprocess.SubprocessError) as e:
+        return broken(f"git 을 부르지 못했다 ({type(e).__name__})", unit='파일')
+
+    for dirpath, dirnames, filenames in os.walk(os.path.join(root, 'plugins')):
+        dirnames[:] = [d for d in dirnames if d not in ('.git', '__pycache__')]
+        for fn in filenames:
+            if fn == '.DS_Store':
+                continue
+            rel = os.path.relpath(os.path.join(dirpath, fn), root).replace(os.sep, '/')
+            r.targets += 1
+            if rel in tracked:
+                continue
+            # `listed` 에 있으면 무시된 게 아니라 그냥 아직 add 안 한 새 파일이다 — 그것도 못 나간다
+            why = ('아직 `git add` 안 됨' if rel in listed
+                   else '**gitignore 가 삼켰다** — `.gitignore` 에 되살리는 규칙을 넣는다')
+            r.fail(f"배포 누락 {rel} — git 이 추적하지 않는다 ({why})")
     return r
 
 

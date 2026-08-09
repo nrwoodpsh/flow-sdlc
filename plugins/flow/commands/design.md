@@ -17,7 +17,7 @@ argument-hint: '[sys | domain {도메인} | {도메인}/{NN.유닛} | 자유 문
 | 레벨 | 스킬 | 조각 |
 |:--|:--|:--|
 | 시스템·도메인 | `traceability`·`usecase`·`doc-template`·`theme-apply`·`plain-writing`·`default-reference` | `traceability/level`·`traceability/id-system`·`traceability/conflict`·`traceability/tagging`·`usecase/rule-level`·`doc-template/diagram`·`doc-template/template-gap`·`default-reference/delegation` |
-| 기능 | `traceability`·`doc-template`·`contract-gate`·`impact-analysis`·`plain-writing`·`default-reference` | `traceability/tagging`·`doc-template/task-doc`·`doc-verify/canon-map`·`contract-gate/config`·`contract-gate/failure`·`impact-analysis/regression-surface` |
+| 기능 | `traceability`·`doc-template`·`contract-gate`·`impact-analysis`·`plain-writing`·`default-reference` | `traceability/tagging`·`doc-template/task-doc`·`doc-verify/canon-map`·`contract-gate/config`·`contract-gate/failure`·`impact-analysis/regression-surface`·`default-reference/delegation` · `code-graph/service-boundary`(**계약 범위를 적을 때만**) |
 
 영향·사각지대를 넓게 훑을 때는 `explorer` 에 위임한다. 위임 판정 자체는 `default-reference` 의 `delegation` 조각이 정본이다.
 

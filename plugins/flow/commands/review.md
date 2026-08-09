@@ -25,7 +25,7 @@ argument-hint: '[doc | deep] [파일/도메인/유닛 경로 (선택 — 없으�
 
 | 무엇 | 이름 |
 |:--|:--|
-| 에이전트 | `reviewer`(격리 리뷰 — 정적분석 도구를 **Bash 로 직접 돌려** 룰 기반 발견을 만든다) · `gatekeeper`(핵심 발견 반증) · `explorer`(문서 다수 대조) |
+| 에이전트 | `reviewer`(격리 리뷰 — 정적분석 도구를 **Bash 로 직접 돌려** 룰 기반 발견을 만든다) · `gatekeeper`(진입 내용 판정 — 발견 등급 반증) · `explorer`(문서 다수 대조) |
 | 절차 조각 | `${CLAUDE_PLUGIN_ROOT}/procedures/review/code.md` · `${CLAUDE_PLUGIN_ROOT}/procedures/review/doc.md` |
 
 ## 게이트
@@ -33,15 +33,16 @@ argument-hint: '[doc | deep] [파일/도메인/유닛 경로 (선택 — 없으�
 진입 조건의 정본은 `flow.topology.json` 의 `commands.review.entry` 다. **이 커맨드가 스스로 판정하지 않는다.**
 
 - **기계** — 없다. 리뷰는 아무 때나 끼울 수 있어야 한다.
-- **내용** — `finding-severity`. 발견과 등급은 **`reviewer` 가 만든다.** 메인 세션이 코드를 훑어 등급을 매기지 않는다 — 도구를 돌리는 쪽이 근거를 갖는다.
-- **자기 검증 금지** — `reviewer` 의 critical·high 는 **`gatekeeper` 에 넘긴다. 반드시 부른다.** 리뷰한 쪽이 자기 발견을 확인하면 편향된다.
+- **내용** — `finding-severity`. 발견과 등급 **초안**은 `reviewer` 가 만든다(도구를 돌리는 쪽이 근거를 갖는다). 그러나 **판정은 `gatekeeper` 에 넘긴다. 반드시 부른다** — 발견을 만든 쪽이 자기 발견의 등급을 확정하면 판정 독립성이 없다.
 
   ```
-  gatekeeper 위임 — critical·high 반증
-    준다: 발견마다 파일:라인 · 근거(어느 층·어느 룰) · 재현 조건
-    받는다: 진짜 문제인가 / 재현되는가 — 반증 우선
+  gatekeeper 위임 — entry.content 의 finding-severity
+    준다: 발견마다 파일:라인 · 근거(어느 층·어느 룰) · 재현 조건 · reviewer 가 매긴 등급
+    받는다: 진짜 문제인가 / 재현되는가 / 등급이 맞나 — 반증 우선
     뒤집히면 등급을 내리고 **뒤집힌 사유를 리포트에 함께 적는다**
   ```
+
+  등급 산정 규칙 자체는 `code-review/severity` 가 정본이다 — 판정자가 그 규칙을 새로 만들지 않는다.
 
 - `medium`·`low` 는 반증하지 않는다 — 비용 대비 값이 낮다.
 - **약속** — `critical-rule-based`. **critical 하드 차단은 룰 기반 발견만이다.** LLM 단독 추측은 리포트로만 — 오탐으로 파이프라인을 멈추지 않는다.
