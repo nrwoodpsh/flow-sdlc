@@ -1,0 +1,30 @@
+**리포트: `doc/01.work/collect/00.quota/6.review/00.코드리뷰.20260810.md`** (00회차 — 이 유닛 첫 리뷰)
+
+## 판정
+
+```
+차단: 0건   룰 기반 critical 없음
+리포트: 7건  medium 1 · low 6
+기각: 2건   gatekeeper 반증으로 뒤집힘
+```
+
+층은 `reviewer`가 Bash로 실제 돌렸다 — 계약 tsc·소스 tsc·`npm test`·셔플 전부 Exit 0(19 passed). `npm run build`는 Exit 127(`tsc: command not found`)이지만 두 task가 통과 조건에서 제외한 알려진 선행 결함이다. **5.verify 문서가 주장한 여섯 항목이 이번 실행과 전부 일치 — 드리프트 없다.**
+
+## 주요 발견
+
+- **medium** `channel.ts:43` — 공개 함수 반환이 `Promise<any>`. 계약에 성공 응답 DTO가 없다
+- **low** `quota.ts:66` — `peek`이 내부 상태를 참조로 유출(`tryConsume`은 새 객체를 만드는데 비대칭). 프로덕션 호출부가 생기면 medium으로 올려야 한다
+- **low** `quota.ts:37` — `dailyCallLimit: NaN`/`Infinity`, `resetOffsetMinutes: NaN`이면 상한이 완전히 무력화된다. 오늘은 설정 배선이 없어 도달 불가
+- **low** `channel.test.ts` — R2(API 키 전역) 단언이 0개. **채널별 카운터로 바꿔도 19개가 전부 통과한다**(문서가 이미 자인한 공백)
+
+## 반증에서 뒤집힌 것
+
+`reviewer`가 `channelId` **파라미터 주입**을 재현해 등급 판정을 넘겼다(`fetchNewVideos('UC_a&key=LEAK')` → URL에 그대로 실린다). `gatekeeper`가 **기각**했다 — 요구의 `범위 밖` 한 줄이 "API 키 주입 · `channelId` URL 이스케이프"로 원인과 결과를 둘 다 명시적으로 뺐고, task가 "기존 URL 형식 그대로"를 지시했으며, 외부 입력이 도달하는 경로가 리포에 없다. 다만 **범위 밖은 "안 고친다"이지 "위험이 없다"가 아니다** — 서버 코드가 붙으면 도달 가능해져 후속 요구로 등록을 권고한다.
+
+`doc/` 계약 import로 산출물이 오염되는 건도 기각 — flow가 정한 구조를 설계·task가 지시한 것이고, `tsconfig.json`이 아직 없어 `rootDir` 결정 자체가 이 유닛 밖이다.
+
+## 안 본 것
+
+`ocr`(패턴) 없음 — **룰 검출이 빠져 정책 값 검증·URL 주입 항목은 LLM 판단뿐이라 차단 근거가 못 된다.** `joern` 없어 grep 축소 모드(`routes.ts:2`의 문자열 디스패치는 원리적으로 못 따라간다). `codex`는 설치돼 있으나 `deep`이 아니라 안 돌렸다 — **설계 의심 층이 없다.** ESLint 없어 정적 룰 0겹이고, `.claude/rules/code-style.md`는 플레이스홀더가 그대로라 대조할 프로젝트 규약도 없다. CI 드리프트 게이트는 옵트인 미활성이다.
+
+코드는 고치지 않았다.

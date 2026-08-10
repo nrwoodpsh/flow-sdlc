@@ -108,3 +108,50 @@ v2 는 **가드가 그 플래그를 막아** 커맨드가 쓰려 해도 못 쓴�
 | 훅 | `check-drift-hook.sh`(SessionStart) |
 | 조각 | 35개 중 24개 · 절차 13개 중 12개 미확인 |
 | 스킬 | `code-graph` · `drift-check` · `ops-doc` · `usecase` · `theme-apply`(프론트 없어 N/A일 수 있다) |
+
+## 갱신 — `review` 회차와 B 리포트 반영
+
+**`review` 는 조각을 제대로 읽었다.** `code-review/{checklist,layers,severity}` ·
+`testing/{run,case-source,integration}` **6개 적재**. `reviewer` 가 실제로 불려 Bash 로 도구를 돌렸고
+(계약 tsc · 소스 tsc · `npm test` 19 passed · 셔플 전부 Exit 0), `gatekeeper` 반증으로 **2건이 기각**됐다.
+`npm run build` 가 Exit 127(`tsc` 없음)인 것도 잡아 보고했다.
+
+> **그래서 F2 는 계통 결함이 아니라 커맨드별 편차다.** `review` 6개 · `sync` 4/8 · `build` 1/7 · `commit` 0/3.
+> *"조각을 못 읽는다"* 가 아니라 **어떤 커맨드는 읽고 어떤 커맨드는 안 읽는다** 가 정확한 서술이다.
+> 수정도 계통 장치가 아니라 **안 읽는 커맨드의 본문**을 봐야 한다.
+
+**에이전트는 5개 중 4개가 실측됐다** — `verifier`·`gatekeeper`·`builder`·`reviewer`.
+`explorer` 만 전 회차 **0회**다(F3).
+
+### B 회차가 더한 것 — 훅은 발화하는데 둘은 아무도 못 본다
+
+| 훅 | 발화 | 모델·stdout 에 닿나 |
+|:--|:--|:--|
+| `guard-danger` | ✅ | ✅ 차단이 곧 전달 |
+| `drift-hook` | ✅ | ✅ 커밋이 멈춘다 |
+| `check-drift-hook` | ✅ | ❌ **stderr(`1>&2`) — 안 닿는다** |
+| `check-guard-canon` | ✅ | ❌ 같음. **그 세션은 가드가 열린 줄 모르고 `--no-verify` 를 시도했다** |
+
+가드는 훅에 입력을 직접 먹여 확정했다 — `git push`·`push origin main`·`git p"u"sh`·`merge`·
+`gh pr merge`·`reset --hard` **전부 exit 2**, `checkout -b`·`commit` 통과.
+`push --dry-run` 통과는 결함이 아니라 `guard-rules.json` 의 `unless: --dry-run` — **설계된 예외다.**
+
+**`--no-verify` 경로는 트랜스크립트 5개 전체에서 없었다.** 실제 커밋은 `git commit -F -` 이고
+`main` 이라 `feat/collect-quota` 를 만들어 커밋했다. **v1 결함이 닫혔다.**
+
+## 결함 목록 — 갱신
+
+| ID | 결함 | 심각도 |
+|:--|:--|:--|
+| **F1** | 플러그인 루트 읽기 차단 — 정본 없이 판정. `permissions.allow` 절대경로·`--setting-sources` **둘 다 실패**(문법 미확인) | **높음** |
+| **B1** | **SessionStart 경고가 stderr 라 아무도 못 본다.** `check-guard-canon` 은 가드 fail-open 을 알리려는 훅인데 그 알림이 안 닿는다 | **높음** |
+| **F2** | 조각 적재가 커맨드마다 다르다 — `build` 1/7 · `commit` 0/3 · `sync` 4/8 · `review` 6 | **높음** |
+| B3 | `commit` 이 브랜치를 만들면 `sync` 가 쓴 색인이 즉시 낡는다 | 중간 |
+| F3 | `explorer` 전 회차 0회 | 중간 |
+| F4 | `gatekeeper` 재판정 누락(커맨드가 자진 신고) | 중간 |
+| B4 | `sync` 가 약속 게이트와 다른 diff 범위를 스스로 넓혔다(근거는 밝힘) | 낮음 |
+| B5 | 조각 경로를 `references/` 없이 먼저 찾아 한 번 실패 | 낮음 |
+| F5 | `verify` 브랜치 못 돌린 1건 | 낮음 |
+| F6 | `prd domain` 산출 부재 — 워커 절단 가능. **재실행으로 가려야 한다** | 중간 |
+
+**F1 과 B1 은 같은 뿌리다** — 플러그인이 모델에게 닿지 못한다. 하나는 정본을, 하나는 경고를.
