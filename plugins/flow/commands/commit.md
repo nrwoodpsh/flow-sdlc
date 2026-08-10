@@ -45,6 +45,22 @@ argument-hint: '[커밋 메시지 힌트 (선택)]'
 
 ## 절차
 
+### 먼저 규약을 읽는다 — 커밋 전 확인을 시작하기 전에
+
+**`## 연결` 의 표는 배선 선언이고 지시가 아니다.** 실측에서 이 커맨드가 세 회차 모두 선언한 조각 셋 중
+**`drift-check/rule` 하나만, 그것도 한 회차에서만** 읽었다. 나머지는 표에만 있었다.
+
+읽는다 — `${CLAUDE_PLUGIN_ROOT}` 아래 경로다.
+
+| 무엇을 위해 | 조각 |
+|:--|:--|
+| **드리프트 판정** | `skills/drift-check/references/rule.md` |
+| 리뷰 미해결을 어느 등급까지 막나 | `skills/code-review/references/severity.md` |
+| 계약·서비스 경계를 건드렸나 | `skills/code-graph/references/service-boundary.md` |
+| 절차 | `procedures/commit/pre-commit-checks.md` |
+
+- **판정 규칙을 안 읽고 "확인했다"고 적지 않는다.** 커밋 전 확인 넷이 전부 이 조각들에 근거한다.
+
 **변경 목록** — `git status` + `git diff --stat` 으로 분류해 제시한다.
 
 **커밋 전 확인** — 넷을 본다(드리프트 · 스키마 문서 · 리뷰 · 조합 검증). 판정 규칙과 문형은 `${CLAUDE_PLUGIN_ROOT}/procedures/commit/pre-commit-checks.md`.

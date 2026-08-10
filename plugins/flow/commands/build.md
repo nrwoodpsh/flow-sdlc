@@ -65,6 +65,29 @@ v1 은 `build` 와 `verify unit` 을 갈라 뒀지만 build 루프가 이미 단
 
 ## 절차
 
+### 먼저 규약을 읽는다 — 구현을 시작하기 전에
+
+**`## 연결` 의 표는 배선 선언이고 지시가 아니다.** 실측에서 이 커맨드가 선언한 조각 일곱 개 중
+**하나도 안 읽고** 구현·검증을 끝냈다. 본문이 조각을 절차 중간의 괄호로만 가리켜서
+*"정본이 어디 있다"* 는 인용으로 읽혔기 때문이다. **그래서 여기서 명령형으로 못 박는다.**
+
+읽는다 — `${CLAUDE_PLUGIN_ROOT}` 아래 경로다.
+
+| 무엇을 위해 | 조각 |
+|:--|:--|
+| 무엇을 세고 무엇을 알리나 | `skills/traceability/references/unit-state.md` · `tagging.md` |
+| **테스트를 어떻게 판정하나** | `skills/testing/references/run.md` · `case-source.md` |
+| 계약 게이트가 실패했을 때 | `skills/contract-gate/references/failure.md` |
+| 우리 규약 체크리스트 | `skills/code-review/references/checklist.md` |
+| 위임 판정 | `skills/default-reference/references/delegation.md` |
+| 절차 | `procedures/build/unit-verify.md` · `procedures/build/schema-change.md` |
+
+- **`testing/run` 을 안 읽고 `5.verify` 를 쓰지 않는다.** 그 조각이 *"추론은 검증이 아니다 —
+  Exit code 로 판정한다"* 를 담은 자리다. 안 읽으면 돌리지 않고 통과라 적는 길이 열린다.
+- **조건부는 해당할 때만** — 기존 코드를 고치면 `impact-analysis/regression-surface`·`code-graph/query`,
+  계약을 건드리거나 MSA 면 `code-graph/service-boundary`, LLM 기능이면 `testing/llm-cost`.
+  판정 근거는 `flow.topology.json` 의 `commands.build.loads.conditional` 이다.
+
 **대상 선언** — 작업 전 필수.
 
 ```
