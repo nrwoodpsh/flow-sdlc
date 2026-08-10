@@ -947,4 +947,49 @@ else
   grep -q 'CLAUDE_PLUGIN_ROOT' "$CGC" && ok_ "훅과 같은 탐색 순서" || no_ "탐색 순서가 다르다"
 fi
 
+# ══════════════════════════════════════════════════════════
+# SessionStart 훅이 **모델에게** 닿나 (실측 B1)
+#
+# 위 케이스들은 `2>&1` 로 stdout·stderr 를 합쳐 본다 — 그래서 **어느 쪽으로 나가든 통과했다.**
+# 실측에서 그 구멍이 드러났다: 훅은 정확히 발화했는데 같은 세션 모델이 `경고 없음` 이라 답했고,
+# 헤드리스 stdout 에도 안 나왔다. `check-guard-canon` 은 가드가 fail-open 인 것을 알리는 훅인데
+# 그 알림이 안 닿아, 그 세션이 가드가 열린 줄 모르고 `--no-verify` 를 시도했다.
+#
+# 모델에 닿는 길은 stdout 의 `hookSpecificOutput.additionalContext` 다(공식 플러그인과 같은 형식).
+# **그래서 여기서는 stdout 만 따로 본다.** stderr 는 사람 몫이라 섞어 세지 않는다.
+head_ "SessionStart — 경고가 모델에게 닿나 (stdout 만 본다)"
+
+ctx_of_() {   # stdin JSON → additionalContext (없으면 빈 문자열)
+  python3 -c 'import json,sys
+try:
+    d=json.load(sys.stdin); h=d.get("hookSpecificOutput") or {}
+    print(h.get("additionalContext","") if h.get("hookEventName")=="SessionStart" else "")
+except Exception: print("")'
+}
+
+if [ -f "$CGC" ]; then
+  so=$(FLOW_GUARD_RULES="$TMP/no-rules.json" bash "$CGC" 2>/dev/null)
+  cx=$(printf '%s' "$so" | ctx_of_)
+  [ -n "$cx" ] && ok_ "가드 정본 부재 — stdout 이 SessionStart JSON 이다" \
+    || no_ "가드 정본 부재 — stdout 에 additionalContext 가 없다 (모델이 못 본다)" "$so"
+  printf '%s' "$cx" | grep -q '막지 않습니다' \
+    && ok_ "  └ 무엇이 안 막히는지 본문에 있다" || no_ "  └ 본문이 비었다" "$cx"
+  so=$(bash "$CGC" 2>/dev/null)
+  [ -z "$so" ] && ok_ "정본이 멀쩡하면 stdout 도 비었다" || no_ "정상인데 stdout 에 뭔가 냈다" "$so"
+fi
+
+CDH="$FLOW/hooks/scripts/check-drift-hook.sh"
+if [ -f "$CDH" ]; then
+  dr="$TMP/sess-drift"; mkrepo_ "$dr"; printf '{}\n' > "$dr/workflow.config.json"
+  so=$(CLAUDE_PROJECT_DIR="$dr" bash "$CDH" 2>/dev/null)
+  cx=$(printf '%s' "$so" | ctx_of_)
+  [ -n "$cx" ] && ok_ "drift 훅 미설치 — stdout 이 SessionStart JSON 이다" \
+    || no_ "drift 훅 미설치 — stdout 에 additionalContext 가 없다 (모델이 못 본다)" "$so"
+  # 설치된 상태에서는 조용해야 한다 — 매 세션 잔소리는 사람이 무시하게 만든다
+  mkdir -p "$dr/.githooks"; printf '#!/bin/sh\n# drift\n' > "$dr/.githooks/pre-commit"
+  git -C "$dr" config core.hooksPath .githooks
+  so=$(CLAUDE_PROJECT_DIR="$dr" bash "$CDH" 2>&1)
+  [ -z "$so" ] && ok_ "drift 훅이 걸려 있으면 조용하다" || no_ "걸려 있는데 말을 걸었다" "$so"
+fi
+
 summary_ "flow 훅"

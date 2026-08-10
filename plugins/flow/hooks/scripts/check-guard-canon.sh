@@ -31,35 +31,50 @@ find_canon() {   # <환경변수 값> <파일 이름>
   return 1
 }
 
+# 메시지를 stderr(사람)와 `additionalContext`(모델) **양쪽**으로 낸다.
+# v1 과 실측이 같은 것을 가르쳤다 — **stderr 만 쓰면 아무도 못 본다.**
+# 실제로 이 훅이 발화한 세션이 가드가 열린 줄 모르고 `--no-verify` 를 시도했다.
+# 머리말이 "조용함만 없앤다"고 적어 둔 그 하나를 못 하고 있었다.
+MSGS=
+say() {                       # <줄> — 사람에게 지금, 모델에게 마지막에
+  printf '%s\n' "$1" 1>&2
+  case "$MSGS" in '') MSGS=$1 ;; *) MSGS="$MSGS · $1" ;; esac
+}
+
 bad=0
 
 rules=$(find_canon "${FLOW_GUARD_RULES:-}" guard-rules.json) || rules=
 if [ -z "$rules" ] || [ ! -f "$rules" ]; then
-  echo "⛔ flow: 차단 목록 정본(guard-rules.json)이 없습니다 — **되돌릴 수 없는 명령을 아무것도 막지 않습니다.**" 1>&2
-  echo "   push·reset --hard·commit --no-verify 가 전부 통과합니다." 1>&2
+  say "⛔ flow: 차단 목록 정본(guard-rules.json)이 없습니다 — **되돌릴 수 없는 명령을 아무것도 막지 않습니다.**"
+  say "   push·reset --hard·commit --no-verify 가 전부 통과합니다."
   bad=1
 elif command -v python3 >/dev/null 2>&1 &&
      ! python3 -c 'import json,sys
 d=json.load(open(sys.argv[1],encoding="utf-8"))
 rs=d.get("rules")
 assert isinstance(rs,list) and rs' "$rules" >/dev/null 2>&1; then
-  echo "⛔ flow: 차단 목록 정본(guard-rules.json)이 깨졌습니다 — **아무것도 막지 않습니다.**" 1>&2
-  echo "   파일: $rules" 1>&2
+  say "⛔ flow: 차단 목록 정본(guard-rules.json)이 깨졌습니다 — **아무것도 막지 않습니다.**"
+  say "   파일: $rules"
   bad=1
 fi
 
 topo=$(find_canon "${FLOW_TOPOLOGY:-}" flow.topology.json) || topo=
 if [ -z "$topo" ] || [ ! -f "$topo" ]; then
-  echo "⚠ flow: 게이트 판정 근거(flow.topology.json)가 없습니다 — 소스 쓰기마다 확인을 묻습니다." 1>&2
+  say "⚠ flow: 게이트 판정 근거(flow.topology.json)가 없습니다 — 소스 쓰기마다 확인을 묻습니다."
   bad=1
 elif command -v python3 >/dev/null 2>&1 &&
      ! python3 -c 'import json,sys
 d=json.load(open(sys.argv[1],encoding="utf-8"))
 assert isinstance(d.get("gate"),dict)' "$topo" >/dev/null 2>&1; then
-  echo "⚠ flow: 게이트 판정 근거(flow.topology.json)가 깨졌습니다 — 소스 쓰기마다 확인을 묻습니다." 1>&2
-  echo "   파일: $topo" 1>&2
+  say "⚠ flow: 게이트 판정 근거(flow.topology.json)가 깨졌습니다 — 소스 쓰기마다 확인을 묻습니다."
+  say "   파일: $topo"
   bad=1
 fi
 
-[ "$bad" -eq 0 ] || echo "   → 플러그인 설치를 다시 확인하세요. 이 상태로 계속하면 그 층은 없는 것입니다." 1>&2
+if [ "$bad" -ne 0 ]; then
+  say "→ 플러그인 설치를 다시 확인하세요. 이 상태로 계속하면 그 층은 없는 것입니다."
+  # 따옴표·개행이 섞이면 JSON 이 깨진다(실측으로 한 번 깨뜨렸다) — 한 줄로 잇고 `"` 를 뗀다.
+  ctx=$(printf '%s' "$MSGS" | tr -d '"' | tr '\n' ' ')
+  printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$ctx"
+fi
 exit 0

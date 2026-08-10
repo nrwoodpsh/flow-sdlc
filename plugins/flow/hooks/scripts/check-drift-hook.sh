@@ -31,10 +31,25 @@ fi
 # **우리** 훅이다. 남의 pre-commit 이 깔려 있으면 우리 검사는 안 도는 것이다.
 grep -ql drift "$dir/pre-commit" 2>/dev/null && exit 0
 
-echo "⚠ flow: drift 훅이 안 돕니다 — 코드-문서 어긋남을 아무도 잡지 않습니다." 1>&2
 if [ -f "$top/.githooks/pre-commit" ]; then
-  echo "  파일은 있는데 설정이 없습니다:  git config core.hooksPath .githooks" 1>&2
+  fix="파일은 있는데 설정이 없습니다:  git config core.hooksPath .githooks"
 else
-  echo "  /flow:setup 으로 설치하세요." 1>&2
+  fix="/flow:setup 으로 설치하세요."
 fi
+
+# **stderr 만 쓰면 아무도 못 본다.** 실측에서 드러났다 — 훅은 정확히 발화했는데
+# 같은 세션 모델이 `경고 없음` 이라 답했고, 헤드리스 stdout 에도 안 나왔다.
+# 조용함을 없애려고 만든 훅이 그 자체로 조용했던 것이다.
+#   stdout  → `additionalContext` 로 **모델에게** 닿는다 (형식은 공식 플러그인과 같다)
+#   stderr  → 대화형 터미널에서 **사람에게** 보인다
+# 둘 다 낸다. 스트림이 달라 섞이지 않는다.
+warn="⚠ flow: drift 훅이 안 돕니다 — 코드-문서 어긋남을 아무도 잡지 않습니다."
+printf '%s\n' "$warn" 1>&2
+printf '  %s\n' "$fix" 1>&2
+
+# **한 줄로 만든다.** 개행·따옴표를 셸에서 이스케이프하는 것은 깨지기 쉽고,
+# 실제로 한 번 깨져서 stdout 이 JSON 이 아니게 됐다. 문장을 ` · ` 로 잇는다.
+ctx="$warn · $fix · 커밋 전 드리프트 검사가 없는 상태다. 사용자에게 알린다. \
+/flow:commit 이 스스로 검사하는 것은 약속이라 기계 게이트로 세지 않는다."
+printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$ctx"
 exit 0
