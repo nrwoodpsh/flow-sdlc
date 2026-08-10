@@ -186,6 +186,20 @@ flow 를 설치하면 가드 훅이 함께 붙어 **되돌릴 수 없는 명령�
 - **면제가 있다** — `spike/` 아래 · 소스가 아닌 것 · 면제로 등록된 경로(`gate.legacyExempt`) · **유닛이 하나도 없는 도입 첫날.** 과차단은 사람이 훅을 꺼 버리게 만들기 때문이다.
 - 막히면 훅을 끄지 말고 `/flow:design` 으로 task 문서를 먼저 만든다.
 
+### 비대화형에서는 `--allowedTools Read` 가 필요하다
+
+`claude -p` 나 CI 에서 flow 커맨드를 돌리면 **커맨드가 위상 정본(`flow.topology.json`)과 스킬 조각을
+못 읽는다.** 플러그인 폴더가 작업 디렉터리 밖이라 Read 승인이 필요한데, 비대화형에는 물을 사람이 없다.
+
+```
+claude --allowedTools "Read,Grep,Glob,Write,Edit,Bash,Task" -p "/flow:next"
+```
+
+- **프로젝트 설정으로는 열리지 않는다** — `permissions.allow` 에 `Read(**)` 를 넣어도, `--setting-sources`
+  를 줘도 안 통했다(실측). **CLI 플래그가 유일한 길이다.**
+- **대화형은 첫 읽기에서 승인을 묻는다.** 승인하면 그 세션은 정상이다.
+- **조용히 틀리지는 않는다** — 못 읽으면 커맨드가 그 사실과 판정 범위를 스스로 밝힌다.
+
 ### 드리프트 훅 — Claude 밖에서 커밋해도 잡는다
 
 `/flow:setup` 이 `pre-commit` 으로 심는다. `.githooks/` 에 두고 `core.hooksPath` 를 가리키므로 파일이 커밋되어 clone 마다 다시 깔 필요가 없다. 어디서 커밋하든 도는 셸 스크립트다.
