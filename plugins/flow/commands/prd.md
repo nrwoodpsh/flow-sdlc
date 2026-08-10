@@ -18,7 +18,9 @@ argument-hint: '[sys | domain {도메인} | func {도메인}/{NN.유닛}] [legac
 | 조각 | `traceability/level`·`traceability/id-system`·`traceability/conflict`·`traceability/coverage`·`usecase/granularity`·`usecase/rule-level`·`usecase/figure-scope`·`doc-template/diagram`·`doc-template/template-gap`·`default-reference/delegation` |
 | 조건부 — **legacy 역추출일 때만** | `traceability/reverse-extract` · `traceability/reverse-check` |
 
-기존 요구·코드를 넓게 확인할 때는 `explorer` 에 위임한다 — `legacy` 에서는 필수다. 위임 판정은 `default-reference` 의 `delegation` 조각이 정본이다.
+기존 요구·코드를 넓게 확인할 때는 `explorer` 에 위임한다. **판정은 `default-reference` 의 `delegation` 조각이 정본이고 여기서 다시 정하지 않는다** — 그 조각은 *결론만 필요하면 위임, 원문이 필요하면 직접* 이고 범위 기준은 유닛이다.
+
+> **`legacy` 에서 무조건 위임이라고 적지 않는다.** 역추출은 하드코딩된 값과 `파일:심볼` 앵커를 **원문 그대로** 집어야 하므로 직접 읽는 쪽이 맞을 때가 있다 — 유닛을 넘는 범위일 때 위임한다. 실측에서 작은 리포는 직접 읽었고 그것이 정본과 맞다.
 
 ## 게이트
 
@@ -151,6 +153,7 @@ ID 형식·발급 순서·유닛 이름 규칙은 `traceability` 의 `id-system`
 
 - 발급한 ID 목록 · 범위 밖 · `확인 필요` 항목을 보여주고 검수를 받는다.
 - 착지 전에 **`gatekeeper` 에게 레벨 판정과 쿼터 대조를 넘긴다.** 통과해야 다음 국면으로 간다.
+- **판정 뒤에 산출물을 고쳤으면 그 판정은 무효다 — 다시 부른다.** 실측에서 대조 층이 요구 하나를 내리고 다른 하나의 문장을 고친 뒤에도 앞선 PASS 를 그대로 들고 갔다. *"요구가 줄었으니 판정이 뒤집히지 않는다"* 는 **진행하는 쪽의 추론**이고, 그 추론을 하지 않게 판정을 분리한 것이다.
 - 다음 국면은 위상 정본(`flow.topology.json` 의 `commands.prd.next`)이 정한다.
 
 ## 가드레일
