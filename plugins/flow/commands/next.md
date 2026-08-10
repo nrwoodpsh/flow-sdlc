@@ -17,6 +17,8 @@ argument-hint: '[하고 싶은 일을 문장으로 | {도메인}/{NN.유닛}] [�
 |:--|:--|
 | 스킬 | `traceability`·`ops-doc`·`code-review` |
 | 조각 | `traceability/level`·`traceability/unit-state`·`traceability/revert-scope`·`ops-doc/safety`·`code-review/severity` |
+| 조건부 — **병렬로 가를 때만** | `traceability/ownership` |
+| 절차 조각 | `${CLAUDE_PLUGIN_ROOT}/procedures/next/parallel.md` · `${CLAUDE_PLUGIN_ROOT}/procedures/next/collect.md` |
 
 ## 진입 조건
 
@@ -50,6 +52,8 @@ argument-hint: '[하고 싶은 일을 문장으로 | {도메인}/{NN.유닛}] [�
 - `traceability` — `references/level.md` · `references/unit-state.md` · `references/revert-scope.md`
 - `ops-doc` — `references/safety.md`
 - `code-review` — `references/severity.md`
+- *병렬로 가를 때만* — `skills/traceability/references/ownership.md`
+- 절차 — `procedures/next/parallel.md` · `procedures/next/collect.md`
 
 ### 상태를 파일에서 계산한다
 
@@ -122,6 +126,22 @@ argument-hint: '[하고 싶은 일을 문장으로 | {도메인}/{NN.유닛}] [�
 | 대상 목록이 새로 정해질 때 | 도메인·유닛을 어떻게 나눌지는 판단이다 — 승인받는다 |
 | 요구를 고쳐야 한다 | **요구가 바닥선이다.** 사람 결정이 입력이다 |
 | **커밋 직전** | **반드시 멈춘다.** 커밋하지 않는다 |
+
+### 갈라서 맡길까 — 병렬 판정 *(요청이 있을 때만)*
+
+**기본은 직렬이다.** 사용자가 병렬을 요청했거나 남은 task 가 여럿일 때만 이 판정을 한다.
+
+| 무엇 | 어디서 보나 |
+|:--|:--|
+| 한도가 있나 | `workflow.config.json` 의 `orchestration` — **비어 있으면 제안하지 않는다** |
+| 소유가 겹치나 | 후보 task 들의 `File Map` — 교집합이 비어야 한다 |
+| 순서가 걸리나 | 유닛 번호·task 번호가 곧 의존 순서다 |
+
+- **가르기·지시서·한도는 `${CLAUDE_PLUGIN_ROOT}/procedures/next/parallel.md` 가 정본이다.**
+  거둬들이기·재개는 `${CLAUDE_PLUGIN_ROOT}/procedures/next/collect.md` 다. **여기 옮겨 적지 않는다.**
+- **띄우는 것은 이 커맨드의 일이 아니다.** flow 는 배정 계획과 판정을 내고 실행은 환경이 한다.
+- **의심스러우면 직렬이다.** 병렬은 확신이 있을 때의 최적화이고, 겹치게 배정하면 두 번째 워커가
+  쓰기 게이트에서 막힌다 — 워커 하나를 버리는 것이다.
 
 ### 멈춘 것을 재개할 때는 사유부터 본다
 

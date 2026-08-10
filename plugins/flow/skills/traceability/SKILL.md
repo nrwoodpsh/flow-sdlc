@@ -45,6 +45,7 @@ description: 요구 ID 체계·태깅·추적 매트릭스·gap 판정·유닛 �
 | 지금 어디까지 됐나 · 어디서 이어가나 | `references/unit-state.md` |
 | 기획서가 없어 **코드에서 요구를 뽑는다** | `references/reverse-extract.md` |
 | 역추출한 요구가 코드와 맞나를 본다 | `references/reverse-check.md` |
+| 일을 여러 워커에게 **갈라 맡긴다** | `references/ownership.md` |
 | 실패해서 앞 국면으로 되돌아간다 | `references/revert-scope.md` |
 
 ## 경계

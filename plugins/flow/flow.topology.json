@@ -333,9 +333,15 @@
           "traceability/revert-scope",
           "ops-doc/safety",
           "code-review/severity"
-        ]
+        ],
+        "conditional": {
+          "traceability/ownership": "병렬로 가를 때만"
+        }
       },
-      "procedures": []
+      "procedures": [
+        "next/parallel",
+        "next/collect"
+      ]
     },
     "prd": {
       "order": 3,
@@ -1005,6 +1011,7 @@
         "coverage",
         "id-system",
         "level",
+        "ownership",
         "reverse-check",
         "reverse-extract",
         "revert-scope",

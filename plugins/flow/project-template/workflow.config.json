@@ -5,7 +5,6 @@
     "v1 은 템플릿 버전을 `03.templates/VERSION` 이라는 자체 형식(주석 + `flow:` + `복사:` 목록)에 뒀다.",
     "JSON 파서가 이미 여기 있는데 정규식으로 읽을 형식을 하나 더 둘 이유가 없다 — `templates` 절로 흡수했다(diag-C 2절)."
   ],
-
   "contract": {
     "pathGlob": "*/3.contract/*.ts",
     "gate": "npx -y -p typescript tsc --noEmit --strict {file}"
@@ -58,6 +57,19 @@
   },
   "review": {
     "severity": "critical"
+  },
+  "orchestration": {
+    "$note": [
+      "**비운 채로 내보낸다.** 동시 수는 사용자의 구독·기기 제약이라 우리가 기본값을 정할 수 없다.",
+      "비어 있으면 /flow:next 가 병렬을 제안하지 않는다 — 직렬로만 돈다.",
+      "models 의 판정자를 진행자보다 싼 등급으로 내리지 않는다. 판정이 유일한 게이트다.",
+      "flow 는 한도를 계획에 반영할 뿐 강제하지 못한다 — 띄우는 것은 환경이다(약속)."
+    ],
+    "maxWorkers": 0,
+    "models": {
+      "worker": "",
+      "judge": ""
+    }
   },
   "publish": {
     "target": "notion",
