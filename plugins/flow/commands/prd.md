@@ -50,6 +50,18 @@ argument-hint: '[sys | domain {도메인} | func {도메인}/{NN.유닛}] [legac
 
 ## 절차
 
+### 먼저 읽는다
+
+**시작하기 전에 아래를 읽는다.** `## 연결` 의 표는 배선 선언이라 지시로 읽히지 않는다 —
+실측에서 한 커맨드가 선언한 조각을 **하나도 안 읽고** 끝냈다(`build`, 0/7).
+경로는 `${CLAUDE_PLUGIN_ROOT}/skills/…` 아래이고, 각 조각이 무엇의 정본인지는 그 파일 첫 줄에 있다.
+
+- `traceability` — `references/level.md` · `references/id-system.md` · `references/conflict.md` · `references/coverage.md`
+- `usecase` — `references/granularity.md` · `references/rule-level.md` · `references/figure-scope.md`
+- `doc-template` — `references/diagram.md` · `references/template-gap.md`
+- `default-reference` — `references/delegation.md`
+- *legacy 역추출일 때만* — `skills/traceability/references/reverse-extract.md` · `skills/traceability/references/reverse-check.md`
+
 ### 레벨을 정하고 대상을 선언한다
 
 레벨 판별 질문과 라우팅은 `traceability` 가 정본이다 — **판별 기준을 여기 옮겨 적지 않는다.**

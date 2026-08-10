@@ -85,7 +85,7 @@ v1 은 `build` 와 `verify unit` 을 갈라 뒀지만 build 루프가 이미 단
 - **`testing/run` 을 안 읽고 `5.verify` 를 쓰지 않는다.** 그 조각이 *"추론은 검증이 아니다 —
   Exit code 로 판정한다"* 를 담은 자리다. 안 읽으면 돌리지 않고 통과라 적는 길이 열린다.
 - **조건부는 해당할 때만** — 기존 코드를 고치면 `impact-analysis/regression-surface`·`code-graph/query`,
-  계약을 건드리거나 MSA 면 `code-graph/service-boundary`, LLM 기능이면 `testing/llm-cost`.
+  계약을 건드리거나 MSA 면 `code-graph/service-boundary`, task 문서를 고치면 `doc-template/task-doc`, LLM 기능이면 `testing/llm-cost`.
   판정 근거는 `flow.topology.json` 의 `commands.build.loads.conditional` 이다.
 
 **대상 선언** — 작업 전 필수.

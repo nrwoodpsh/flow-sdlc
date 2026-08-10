@@ -478,6 +478,23 @@ def _tracked(swallow):
     return build
 
 
+def _read_instr(named):
+    """선언한 조각을 본문이 이름으로 가리키나. `named=False` 면 표에만 있는 상태다."""
+    body = ("---\nname: build\n---\n\n# build\n\n## 연결\n\n"
+            "| 무엇 | 이름 |\n|:--|:--|\n| 조각 | `testing/run` |\n\n## 절차\n\n")
+    body += ("### 먼저 읽는다\n\n읽는다: `skills/testing/references/run.md`\n"
+             if named else "구현한다. 규약은 표에 있다.\n")
+    return {TOPO_REL: json.dumps(
+                {'version': 1,
+                 'commands': {'build': {'order': 1, 'phase': '구현', 'after': [], 'next': [],
+                                        'entry': {'machine': [], 'content': [], 'promise': []},
+                                        'exit': {'content': []},
+                                        'loads': {'skills': ['testing'], 'fragments': ['testing/run']},
+                                        'procedures': []}}},
+                ensure_ascii=False, indent=2),
+            'plugins/flow/commands/build.md': body}
+
+
 CASES = {
     # ── 표 렌더 4종 ──
     'table-columns': (
@@ -760,6 +777,13 @@ CASES = {
         _tracked(swallow=False),
         # 전역 gitignore 의 `build/` 가 절차 조각을 삼킨 상태 — 디스크엔 있고 git 엔 없다
         _tracked(swallow=True),
+    ),
+
+    # ── 선언한 조각에 읽기 지시가 있나 ──
+    'fragment-read-instructed': (
+        _read_instr(named=True),
+        # 표에만 있고 본문이 이름으로 안 가리킨다 — 실측에서 0/7 이 난 상태다
+        _read_instr(named=False),
     ),
 }
 

@@ -39,6 +39,19 @@ argument-hint: '[도메인 (선택 — 없으면 git diff 에서 자동 분류)]
 
 ## 절차
 
+### 먼저 읽는다
+
+**시작하기 전에 아래를 읽는다.** `## 연결` 의 표는 배선 선언이라 지시로 읽히지 않는다 —
+실측에서 한 커맨드가 선언한 조각을 **하나도 안 읽고** 끝냈다(`build`, 0/7).
+경로는 `${CLAUDE_PLUGIN_ROOT}/skills/…` 아래이고, 각 조각이 무엇의 정본인지는 그 파일 첫 줄에 있다.
+
+- `traceability` — `references/tagging.md` · `references/unit-state.md` · `references/coverage.md` · `references/conflict.md`
+- `drift-check` — `references/rule.md`
+- `doc-verify` — `references/canon-map.md`
+- `contract-gate` — `references/failure.md`
+- `default-reference` — `references/delegation.md`
+- 절차 — `procedures/sync/index.md`
+
 **diff 수집·분류** — 백엔드·프론트·DB·설정으로 나눈다. 비었으면 `동기화 대상 없음` 을 알리고 끝낸다.
 
 - **유닛을 넘으면 `explorer` 에 위임한다**(`default-reference/delegation`) — 무엇이 어느 유닛에 속하는지는 **결론만** 필요하다. 큰 diff 를 메인에서 통째로 읽지 않는다.

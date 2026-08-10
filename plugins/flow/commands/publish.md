@@ -40,6 +40,16 @@ argument-hint: '[도메인/유닛 또는 project (선택)] [→ 발행처 (선�
 
 ## 절차
 
+### 먼저 읽는다
+
+**시작하기 전에 아래를 읽는다.** `## 연결` 의 표는 배선 선언이라 지시로 읽히지 않는다 —
+실측에서 한 커맨드가 선언한 조각을 **하나도 안 읽고** 끝냈다(`build`, 0/7).
+경로는 `${CLAUDE_PLUGIN_ROOT}/skills/…` 아래이고, 각 조각이 무엇의 정본인지는 그 파일 첫 줄에 있다.
+
+- `doc-template` — `references/diagram.md`
+- `default-reference` — `references/delegation.md`
+- 절차 — `procedures/publish/collect.md` · `procedures/publish/url-record.md`
+
 **대상 선언** — 무엇을·어디로 내보내는지 먼저 밝히고 **확인받는다.**
 
 ```

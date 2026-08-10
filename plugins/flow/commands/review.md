@@ -58,6 +58,24 @@ argument-hint: '[doc | deep] [파일/도메인/유닛 경로 (선택 — 없으�
 
 ## 절차
 
+### 먼저 읽는다
+
+**시작하기 전에 아래를 읽는다.** `## 연결` 의 표는 배선 선언이라 지시로 읽히지 않는다 —
+실측에서 한 커맨드가 선언한 조각을 **하나도 안 읽고** 끝냈다(`build`, 0/7).
+경로는 `${CLAUDE_PLUGIN_ROOT}/skills/…` 아래이고, 각 조각이 무엇의 정본인지는 그 파일 첫 줄에 있다.
+
+- **코드 모드** `code-review` — `references/layers.md` · `references/severity.md` · `references/checklist.md`
+- **코드 모드** `code-graph` — `references/query.md` · `references/service-boundary.md`
+- **코드 모드** `testing` — `references/run.md`
+- **코드 모드** `default-reference` — `references/delegation.md`
+- **문서 모드** `doc-verify` — `references/grade.md` · `references/scoring.md` · `references/canon-map.md`
+- **문서 모드** `usecase` — `references/granularity.md` · `references/figure-scope.md` · `references/rule-level.md`
+- **문서 모드** `traceability` — `references/coverage.md`
+- **문서 모드** `ops-doc` — `references/postmortem.md`
+- **문서 모드** `default-reference` — `references/delegation.md`
+- *역추출 문서를 채점할 때만* — `skills/traceability/references/reverse-check.md`
+- 절차 — `procedures/review/code.md` · `procedures/review/doc.md`
+
 **대상 선언** — 무엇을 어느 층으로 보는지, **무엇이 빠졌는지 먼저 밝힌다.**
 
 ```

@@ -2184,6 +2184,62 @@ def _plugin_files_tracked(ctx):
     return r
 
 
+# ── 선언한 조각을 읽으라고 지시하나 ──
+# **`## 연결` 의 표는 배선 선언이고 지시가 아니다.** 실측에서 `build` 가 선언한 조각 7개 중
+# 하나도 안 읽고 구현·검증을 끝냈다. 조각을 절차 중간의 괄호로만 가리켜 *"정본이 어디 있다"* 는
+# 인용으로 읽혔기 때문이다. 읽으라는 절을 세우고 다시 돌리니 **0/7 → 7/7 이 두 번 재현됐다.**
+#
+# **간접도 인정한다** — `design` 은 조각을 자기 절에 적지 않고 절차 조각에 맡기는데(그 절차가
+# 조각을 지시한다) 실측에서 7개를 읽었다. 그래서 커맨드 본문 **또는 그 커맨드가 싣는 절차 조각**에서
+# 이름이 불리면 통과다. 한 방식을 강요하지 않는다.
+@check('fragment-read-instructed', '선언한 조각에 읽기 지시가 있나',
+       '표에만 있으면 지시로 읽히지 않는다 — 실측에서 0/7 이 났다')
+def _fragment_read_instructed(ctx):
+    # **범위가 이 검사의 전부다.** 처음에 본문 전체에서 이름을 찾게 만들었더니
+    # `## 연결` 표가 그 조건을 이미 만족시켜 **사보타주가 통과했다** — 읽기 목록을 24줄 지워도
+    # 초록이었다. v1 이 사문화된 검사를 갖고 있던 것과 같은 형태다.
+    # 그래서 **읽기 절 안** 과 **그 커맨드가 싣는 절차 조각** 만 본다. 표는 세지 않는다.
+    r = Result(unit='조각')
+    topo = _topo(ctx)
+    if not topo:
+        return r
+    for p in ctx.commands():
+        name = os.path.basename(p)[:-3]
+        c = (topo.get('commands') or {}).get(name) or {}
+        loads = c.get('loads') or {}
+        want = set()
+        for m in (loads.get('modes') or {None: loads}).values():
+            if not isinstance(m, dict):
+                continue
+            want |= set(m.get('fragments') or [])
+            want |= set(m.get('conditional') or {})
+        if not want:
+            continue
+
+        # 읽기 절 — `###` 제목에 `읽` 이 든 절의 본문. 없으면 그 자체가 실패다.
+        L = ctx.lines(p)
+        st = next((i for i, l in enumerate(L)
+                   if re.match(r'^###\s', l) and '읽' in l), None)
+        if st is None:
+            r.targets += len(want)
+            r.fail(f"읽기 절 없음 {ctx.rel(p)} — 조각 {len(want)}개를 선언했는데 "
+                   f"`### … 읽는다` 절이 없다 (표는 지시가 아니다)")
+            continue
+        en = next((i for i in range(st + 1, len(L)) if L[i].startswith('### ')), len(L))
+        hay = '\n'.join(L[st:en])
+        # **간접을 인정한다** — `design` 은 조각을 절차 조각에 맡기고 실측에서 7개를 읽었다.
+        for pr in (c.get('procedures') or []):
+            fp = os.path.join(ctx.root, f'plugins/flow/procedures/{pr}.md')
+            if os.path.isfile(fp):
+                hay += '\n' + ctx.read(fp)
+
+        for f in sorted(want):
+            r.targets += 1
+            if f.split('/')[1] not in hay:
+                r.fail(f"읽기 지시 부재 {ctx.rel(p)} — `{f}` 를 선언했는데 읽기 절도 "
+                       f"절차 조각도 이름으로 가리키지 않는다")
+    return r
+
 # ── 실행 ──
 
 def run(ctx, only=None):

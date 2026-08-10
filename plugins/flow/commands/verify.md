@@ -62,6 +62,19 @@ v1 은 이 둘을 한 커맨드 본문에 붙여 뒀는데 도구·에이전트�
 
 ## 절차
 
+### 먼저 읽는다
+
+**시작하기 전에 아래를 읽는다.** `## 연결` 의 표는 배선 선언이라 지시로 읽히지 않는다 —
+실측에서 한 커맨드가 선언한 조각을 **하나도 안 읽고** 끝냈다(`build`, 0/7).
+경로는 `${CLAUDE_PLUGIN_ROOT}/skills/…` 아래이고, 각 조각이 무엇의 정본인지는 그 파일 첫 줄에 있다.
+
+- **단위 모드** `testing` — `references/run.md` · `references/case-source.md`
+- **단위 모드** `traceability` — `references/coverage.md`
+- **통합·커버리지 모드** `testing` — `references/run.md` · `references/case-source.md` · `references/integration.md`
+- **통합·커버리지 모드** `traceability` — `references/coverage.md`
+- **통합·커버리지 모드** `default-reference` — `references/delegation.md`
+- 절차 — `procedures/verify/coverage.md` · `procedures/verify/run.md`
+
 **대상 선언** — 무엇을 어느 범위로 도는지 먼저 밝힌다.
 
 ```

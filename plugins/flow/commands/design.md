@@ -66,6 +66,7 @@ argument-hint: '[sys | domain {도메인} | {도메인}/{NN.유닛} | 자유 문
 | 기능 | `${CLAUDE_PLUGIN_ROOT}/procedures/design/feature.md` |
 
 - **둘을 같이 읽지 않는다.** 도메인 설계는 도메인당 1회, 기능 설계는 기능마다 반복이다.
+- **레벨과 무관하게 먼저 읽는 둘** — 넓게 훑을지 위임할지는 `skills/default-reference/references/delegation.md`, 브랜치가 갈린 상태의 번호 충돌은 `skills/traceability/references/conflict.md` 가 정본이다.
 - 레벨을 판별하지 못하면 **묻고 멈춘다.** 추측한 레벨로 진행하면 착지처와 ID 형식이 함께 틀어진다.
 - 요구가 없을 때: **버그·변경 요청이면 기능 절차가 요구를 자동 발급**한다. 신규 기능이면 `/flow:prd` 를 먼저 안내한다.
 
