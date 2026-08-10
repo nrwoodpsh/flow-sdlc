@@ -44,7 +44,9 @@ argument-hint: '[도메인/유닛 또는 project (선택)] [→ 발행처 (선�
 
 **시작하기 전에 아래를 읽는다.** `## 연결` 의 표는 배선 선언이라 지시로 읽히지 않는다 —
 실측에서 한 커맨드가 선언한 조각을 **하나도 안 읽고** 끝냈다(`build`, 0/7).
-경로는 `${CLAUDE_PLUGIN_ROOT}/skills/…` 아래이고, 각 조각이 무엇의 정본인지는 그 파일 첫 줄에 있다.
+전체 경로는 **`${CLAUDE_PLUGIN_ROOT}/skills/{스킬}/references/{조각}.md`** 다 —
+`references/` 를 빠뜨리면 파일이 없다(실측에서 한 번 그렇게 실패했다).
+각 조각이 무엇의 정본인지는 그 파일 첫 줄에 있다.
 
 - `doc-template` — `references/diagram.md`
 - `default-reference` — `references/delegation.md`

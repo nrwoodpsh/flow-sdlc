@@ -25,7 +25,11 @@ argument-hint: '[도메인 (선택 — 없으면 git diff 에서 자동 분류)]
 
 게이트 조건의 정본은 `flow.topology.json` 의 `commands.sync` 의 `entry`·`exit` 다. **이 커맨드가 스스로 판정하지 않는다.**
 
-- **약속** — `source-changed`. `git diff` 가 비었으면 동기화할 것이 없다.
+- **약속** — `source-changed`. **범위는 작업 트리 `git diff` 와 마지막 수렴 이후의 커밋 둘이다.**
+  작업 트리가 비어도 커밋에 소스 변경이 있고 그 커밋에 `7.summary/`·색인이 없으면 수렴 대상이다 —
+  `build` 다음에 커밋을 먼저 한 경우가 그렇다. **둘 다 비었을 때만 `동기화 대상 없음` 이다.**
+- **범위를 넓혔으면 무엇을 왜 넓혔는지 리포트 첫머리에 적는다.** 실측에서 커맨드가 스스로 넓히고
+  근거를 밝혔는데, 선언에 그 범위가 없어 **판정과 실제가 어긋난 것으로 읽혔다.** 선언을 실제에 맞춘다.
   **진행하는 쪽이 자기 diff 를 보는 것**이라 판정 독립성이 없다 — 그래서 약속이다.
 - **내용** — 없다. `entry.content`·`exit.content` 가 둘 다 비어 있으니 **여기서 `gatekeeper` 를 부르지 않는다.** 부를 자리를 만들려면 `flow.topology.json` 에 먼저 적는다 — 커맨드 본문이 게이트를 발명하지 않는다.
 
@@ -43,7 +47,9 @@ argument-hint: '[도메인 (선택 — 없으면 git diff 에서 자동 분류)]
 
 **시작하기 전에 아래를 읽는다.** `## 연결` 의 표는 배선 선언이라 지시로 읽히지 않는다 —
 실측에서 한 커맨드가 선언한 조각을 **하나도 안 읽고** 끝냈다(`build`, 0/7).
-경로는 `${CLAUDE_PLUGIN_ROOT}/skills/…` 아래이고, 각 조각이 무엇의 정본인지는 그 파일 첫 줄에 있다.
+전체 경로는 **`${CLAUDE_PLUGIN_ROOT}/skills/{스킬}/references/{조각}.md`** 다 —
+`references/` 를 빠뜨리면 파일이 없다(실측에서 한 번 그렇게 실패했다).
+각 조각이 무엇의 정본인지는 그 파일 첫 줄에 있다.
 
 - `traceability` — `references/tagging.md` · `references/unit-state.md` · `references/coverage.md` · `references/conflict.md`
 - `drift-check` — `references/rule.md`
