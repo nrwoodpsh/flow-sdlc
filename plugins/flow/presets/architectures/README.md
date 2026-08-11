@@ -21,7 +21,7 @@
 | **`custom`** | **내가 지정** | 임의 git URL (사내 스타터·개인 보일러플레이트) | 아래 "커스텀 원형 추가" |
 | `none` | 원형 없음 | — | 기존 코드에 flow만 얹음 |
 
-> **`원형 소스`가 `{{…}}`인 항목은 카탈로그에 두지 않는다** — clone 을 시도해 실패하게 두지 않는다. 앞선 판은 URL 미정인 두 행(`agent-app`·`mcp-server`)을 표에 두었고, 그 때문에 검사기에 예외까지 생겼다(diag-C 2절). 쓸 수 있게 되면 URL 과 함께 한 줄 추가한다.
+> **`원형 소스`가 `{{…}}`인 항목은 카탈로그에 두지 않는다** — clone 을 시도해 실패하게 두지 않는다. URL 미정인 행을 표에 두면 검사기에 예외가 생긴다. 쓸 수 있게 되면 URL 과 함께 한 줄 추가한다.
 
 > **MSA 원형은 위 표의 것들** — 둘 다 Gateway·Eureka·Config를 각자 가진 **풀 MSA라 대체 관계(합치지 않음)**. 신규는 `egov-msa-cc`(최신) 권장, `egov-msa`(msa-edu, 2021 교육용)는 학습·참고 + 무거우니 슬림화. MSA 운영환경: `egovframe-operating-environment-msa`(Istio·OpenTelemetry).
 

@@ -14,8 +14,8 @@
 # ── 우회: 경로별로 다르다 (층 수를 세지 말고 경로를 봐라) ──────────
 #   사람 경로  `git commit --no-verify` 로 넘어간다. 사람의 판단이라 남겨 둔다.
 #   AI 경로    guard-danger.sh 가 `--no-verify` 와 `-c core.hooksPath=` 를 **차단한다**
-#              (guard-rules.json 의 defense-off 등급). 앞선 판은 안 막았고,
-#              그래서 /flow:commit 자신이 이 훅을 끄고 커밋했다 (diag-C 3절).
+#              (guard-rules.json 의 defense-off 등급). 안 막으면 커맨드 자신이
+#              이 훅을 끄고 커밋하는 길이 열린다.
 set -uo pipefail
 
 proj="$(git rev-parse --show-toplevel 2>/dev/null || echo .)"

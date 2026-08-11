@@ -2,7 +2,7 @@
 # 이 리포의 CI — **`.example` 가 아니다. 우회 불가한 기계다.**
 # ─────────────────────────────────────────────────────────────
 # v1 은 드리프트 게이트를 `.example` 옵트인으로 뒀고, 그게 AI 경로가 1겹이던 이유다
-# (`doc/00.diagnosis/diag-C-infra.md` 3절). 이 리포에서는 필수로 돈다.
+# 이 리포에서는 필수로 돈다.
 #
 # **사용자 프로젝트에 주는 CI 는 여전히 옵트인이다**
 # (`plugins/flow/project-template/.github/workflows/drift-gate.yml.example`).

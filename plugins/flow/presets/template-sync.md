@@ -10,7 +10,7 @@ workflow.config.json 의 templates.flowVersion  ↔  플러그인 version
    다르다 → 아래를 파일별로 제시한다
 ```
 
-**값의 자리는 `workflow.config.json` 하나다.** 앞선 판은 `03.templates/VERSION` 이라는 자체 형식 파일을 따로 뒀고, 그래서 읽는 쪽이 정규식을 써야 했다(diag-C 2절).
+**값의 자리는 `workflow.config.json` 하나다.** `03.templates/VERSION` 같은 자체 형식 파일을 따로 두면 읽는 쪽이 정규식을 써야 한다.
 
 | 상태 | 무엇 | 기본 |
 |:--|:--|:--|

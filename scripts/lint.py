@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 """문서 정합 검사 — 눈으로는 안 보이고 grep 으로도 안 걸리는 것들.
 
-앞선 판 `lint-docs.py` 653줄에서 **진단이 값어치를 확인한 검사만** 옮겼다
-(`doc/00.diagnosis/diag-C-infra.md` 1절). 버린 것은 4절·2절 근거다 —
-사문화된 검사(앞선 판 검사 4의 에이전트·스킬 화이트리스트 22개)와
-유지비가 안 맞는 검사(앞선 판 검사 7 갯수 표기).
+**값어치가 확인된 검사만 둔다.** 두지 않는 것 — 사문화된 검사(어떤 입력에도 안 걸리는 것)와
+유지비가 안 맞는 검사(손으로 적은 화이트리스트를 유지해야 하는 것).
 
 구조 — 검사는 `@check` 로 등록한다. 등록하면 `--list` 에 뜨고,
 `lint.test.py` 가 그 목록을 읽어 **픽스처 없는 검사를 실패로 만든다.**
 검사를 더하고 테스트를 안 붙이는 길이 없다.
 
 각 검사는 걸린 것과 함께 **본 대상 수**를 돌려준다. 대상이 0건이면 통과가 아니라
-`대상 0건` 으로 따로 적는다 — 앞선 판은 대상 0건과 전부 통과를 구별하지 못했다.
+`대상 0건` 으로 따로 적는다 — 대상 0건과 전부 통과는 다른 것이다.
 
 돌리는 법
   python3 scripts/lint.py                  repo 전체
@@ -48,7 +46,7 @@ SEP = re.compile(r'^\|[:\- |]+\|$')
 # 두 범위가 있고 이유가 다르다.
 #   INSTRUCTION — 런타임에 실리는 지시서. 절 이름·frontmatter 규약이 여기서만 뜻을 가진다.
 #   RENDER      — 렌더되는 모든 문서. 깨진 표는 어느 문서에서든 문서를 깨뜨린다.
-# 앞선 판은 범위가 하나여서 이 구분이 없었다. `doc/` (설계·진단 기록)은 렌더 범위에만 든다.
+# `doc/` (설계 문서)은 렌더 범위에만 든다.
 INSTRUCTION = ('plugins/**/*.md', 'guide/**/*.md', '.claude/rules/*.md',
                '.claude/skills/*/SKILL.md', 'README.md', 'CLAUDE.md')
 RENDER = INSTRUCTION + ('doc/**/*.md',)
@@ -163,7 +161,7 @@ def tables(lines, fenced=None):
     """(머리글 index, 본문 끝 index) 목록.
 
     머리글 다음 줄이 구분선인 것만 표다 — 그게 마크다운이 표로 렌더하는 조건이다.
-    펜스 안은 렌더될 때 표가 아니라 글자라 대상이 아니다(앞선 판은 검사 넷 중 둘만 이걸 봤다).
+    펜스 안은 렌더될 때 표가 아니라 글자라 대상이 아니다. 표 검사 넷 전부가 이걸 본다.
     """
     if fenced is None:
         fenced = fenced_map(lines)
@@ -191,7 +189,7 @@ def norm(s):
 # ── 1. 표 열 수 ──
 # 이스케이프 안 된 `|` 가 행을 깨뜨린다.
 @check('table-columns', '표 열 수',
-       '이스케이프 안 된 `|` 가 행을 깨뜨린다 (diag-C 1절 · 앞선 판 검사 1)')
+       '이스케이프 안 된 `|` 가 행을 깨뜨린다')
 def _table_columns(ctx):
     r = Result(unit='표')
     for f in ctx.render_files():
@@ -210,7 +208,7 @@ def _table_columns(ctx):
 # 표 사이에 비-표 줄(문단·blockquote)이 끼면 뒤 행은 표가 아니라 파이프 문자열로 렌더된다.
 # 열 수 검사는 끊긴 뒤 행을 아예 안 보므로 따로 본다.
 @check('table-orphan-row', '끊긴 표 (고아 행)',
-       '표 사이에 글이 껴 뒤 행이 표 밖으로 나간다 (diag-C 1절 · 앞선 판 검사 1-1)')
+       '표 사이에 글이 껴 뒤 행이 표 밖으로 나간다')
 def _table_orphan(ctx):
     r = Result(unit='표')
     for f in ctx.render_files():
@@ -240,7 +238,7 @@ def _table_orphan(ctx):
 # 표 마지막 행 다음 줄이 `-`·`*`·글자면 표 안으로 빨려 들어가 마지막 칸에 붙어 렌더된다.
 # 고아 행 검사는 표 사이에 낀 것만 보고 이 경우를 안 본다.
 @check('table-blank-line', '표 뒤 빈 줄',
-       '표 바로 뒤 불릿·문단이 마지막 칸에 흡수된다 (diag-C 1절 · 앞선 판 검사 1-1b)')
+       '표 바로 뒤 불릿·문단이 마지막 칸에 흡수된다')
 def _table_blank_line(ctx):
     r = Result(unit='표')
     for f in ctx.render_files():
@@ -262,7 +260,7 @@ def _table_blank_line(ctx):
 # 표 본문 → 빈 줄 → 다시 `|` 행인데 구분선이 없으면, 뒷조각은 머리글 없는 표로 깨져 렌더된다.
 # 고아 행 검사는 표 사이에 **글이 낀** 경우만 보고 빈 줄 하나로 갈린 이 경우를 안 본다.
 @check('table-split', '쪼개진 표 (머리글 상실)',
-       '빈 줄로 끊겨 뒷조각이 머리글을 잃는다 (diag-C 1절 · 앞선 판 검사 1-1c)')
+       '빈 줄로 끊겨 뒷조각이 머리글을 잃는다')
 def _table_split(ctx):
     r = Result(unit='표')
     for f in ctx.render_files():
@@ -283,10 +281,10 @@ def _table_split(ctx):
 
 
 # ── 5. argument-hint 무따옴표 ──
-# 안 감싸면 **파일이 통째로 안 뜬다.** 앞선 판은 이 사고를 yaml 파싱 검사(검사 6-1)와 따로 뽑아 뒀다 —
-# 그쪽은 `import yaml` 이 실패하면 통째로 꺼지기 때문이다(diag-C 1절). 여기서는 yaml 을 아예 안 쓴다.
+# 안 감싸면 **파일이 통째로 안 뜬다.** yaml 파싱 검사와 따로 둔다 —
+# 그쪽은 `import yaml` 이 실패하면 통째로 꺼진다. 여기서는 yaml 을 아예 안 쓴다.
 @check('argument-hint-quoted', 'argument-hint 따옴표',
-       '안 감싸면 커맨드 파일이 안 뜬다 (diag-C 1절 · 앞선 판 검사 6-2)')
+       '안 감싸면 커맨드 파일이 안 뜬다')
 def _argument_hint(ctx):
     r = Result(unit='줄')
     for f in ctx.commands():
@@ -357,7 +355,7 @@ def _named_in_rows(text):
 def _desc(ctx, path):
     """frontmatter 의 description. folded(`>-`) 도 이어 붙여 한 줄로.
 
-    한 물리 줄만 읽으면 folded 에서는 `>-` 만 잡혀 **검사가 조용히 꺼진다**(앞선 판이 그 사고를 겪었다).
+    한 물리 줄만 읽으면 folded 에서는 `>-` 만 잡혀 **검사가 조용히 꺼진다.**
     """
     L = ctx.lines(path)
     if not L or L[0].strip() != '---':
@@ -380,11 +378,11 @@ def _desc(ctx, path):
     return None
 
 
-# ── 출력 형식 ↔ 템플릿 왕복 (앞선 판 검사 10 · 10-1) ──
+# ── 출력 형식 ↔ 템플릿 왕복 ──
 # 스킬의 `출력 형식` 절이 지시한 절 이름과 그 템플릿의 절이 어긋나면,
-# 그대로 만든 문서가 `doc-verify` 채점에서 FAIL 이다. 그 인과가 실제로 있었다(diag-C 1절).
+# 그대로 만든 문서가 `doc-verify` 채점에서 FAIL 이다. 그 인과가 실제로 있었다.
 #
-# 앞선 판은 스킬↔템플릿 짝을 **스크립트 안에 손으로 열거**했다(`OUT_TPL`·`MULTI`·`ROUNDTRIP`).
+# 스킬↔템플릿 짝을 **스크립트 안에 손으로 열거하지 않는다** — 그러면 정본이 둘이다.
 # 그게 diag-C 4절이 말하는 그 병이다 — 정본이 둘. 지금은 `flow.topology.json` 의
 # `output_templates` 가 정본이고 검사기는 그걸 읽는다. 짝을 늘리는 비용이 데이터 한 줄이다.
 #
@@ -399,7 +397,7 @@ def _desc(ctx, path):
 # 덧붙이는 조각에 그걸 물으면 남의 문서의 필수 절까지 요구하게 된다. 그러나 이름 대조는 둘 다 받는다.
 # `콘솔` 은 대조할 템플릿이 없다는 **선언**이다 — 짝을 안 적어서 조용히 꺼지는 것과 다르다.
 #
-# **`SKILL.md` 만 스캔하면 안 된다.** 이 판은 출력 형식을 `references/` 조각으로 내렸다 —
+# **`SKILL.md` 만 스캔하면 안 된다.** 출력 형식은 `references/` 조각에 있다 —
 # SKILL.md 만 보면 템플릿이 생겨도 이 검사는 영구히 대상 0건이다.
 OUT_SCAN = ('plugins/flow/skills/*/SKILL.md',
             'plugins/flow/skills/*/references/*.md',
@@ -496,7 +494,7 @@ def _tpl_required(ctx, name):
 
 
 @check('output-sections-exist', '출력 형식 절이 템플릿에 있나',
-       '스킬이 이름을 지어내면 생성 문서가 채점에서 미등재다 (diag-C 1절 · 앞선 판 검사 10)')
+       '스킬이 이름을 지어내면 생성 문서가 채점에서 미등재다')
 def _output_sections_exist(ctx):
     r = Result(unit='절')
     decl = _out_decl(ctx)
@@ -536,7 +534,7 @@ def _output_sections_exist(ctx):
 
 
 @check('output-required-sections', '템플릿 필수 절이 출력 형식에 있나',
-       '이름 대조만으로는 빠진 절을 못 본다 (diag-C 1절 · 앞선 판 검사 10-1)')
+       '이름 대조만으로는 빠진 절을 못 본다')
 def _output_required(ctx):
     r = Result(unit='필수 절')
     for p, name, tpls in _declared(ctx):
@@ -561,11 +559,11 @@ def _output_required(ctx):
 
 
 # ── 규약 사본 ──
-# 정본이 둘이 되면 한쪽만 고쳐진다. 이걸 기계로 지키는 유일한 장치다(diag-C 1절 · 앞선 판 검사 11).
+# 정본이 둘이 되면 한쪽만 고쳐진다. 이걸 기계로 지키는 유일한 장치다.
 #
-# **대상을 넓혔다.** 앞선 판과 이 판의 초기 이식은 `SKILL.md` 14개만 돌았다(`ctx.skills()`). 이 판은 규약 내용을
+# **대상이 `SKILL.md` 14개가 아니다.** `ctx.skills()` 만 돌면 그 14개는 대부분 라우터다. 규약 내용은
 # `references/` 조각으로 내렸으므로 그 14개는 대부분 라우터고, **조각 35개(약 1,900줄, 이 층의
-# 82%)와 커맨드·절차 본문이 검사 밖**이었다 — 사본은 거기 살아 있다(재설계 D6 · W2 `중복과 공백`).
+# 82%)와 커맨드·절차 본문이 검사 밖**이었다 — 사본은 거기 살아 있다.
 #
 # **지시 층끼리는 대조하지 않는다.** 커맨드·절차 본문은 커맨드마다 자기 게이트·경계를 선언해야
 # 해서 같은 문장이 겹치는 것이 정상이다(`내용 — 없다…` 가 네 커맨드에 있다). 게다가 둘 다 정본을
@@ -592,7 +590,7 @@ def _nz(s):
 
 
 @check('skill-duplication', '규약 사본 (스킬·조각·커맨드)',
-       '정본이 둘이 되면 한쪽만 고쳐진다 (diag-C 1절 · 앞선 판 검사 11 · SequenceMatcher ≥ 0.85)')
+       '정본이 둘이 되면 한쪽만 고쳐진다')
 def _skill_duplication(ctx):
     r = Result(unit='문서')
     canon = set(ctx.paths(*DUP_CANON))
@@ -622,7 +620,7 @@ def _skill_duplication(ctx):
 
 
 # ── 절 이름에 번호·라벨이 붙었나 ──
-# 절을 하나 더하면 밖에서 번호로 가리킨 줄이 조용히 어긋난다. 앞선 판에서 실제로 그랬다(앞선 판 검사 8-1).
+# 절을 하나 더하면 밖에서 번호로 가리킨 줄이 조용히 어긋난다.
 # 산문·프롬프트 안의 번호는 대상이 아니다 — `N단계` 는 순서가 뜻이다.
 # 템플릿(`03.templates/`)은 사람이 절 번호로 자리를 찾는 골격이라 뺀다.
 LABELED = re.compile(r'^#{2,4}\s+(?:[0-9]+\s*[.)]|[①-⑳]|절차\s+[A-Z0-9])')
@@ -630,7 +628,7 @@ HEADING = re.compile(r'^#{2,4}\s+\S')
 
 
 @check('section-label', '절 이름 번호·라벨 금지',
-       '절을 하나 더하면 번호로 가리킨 참조가 조용히 어긋난다 (앞선 판 검사 8-1)')
+       '절을 하나 더하면 번호로 가리킨 참조가 조용히 어긋난다')
 def _section_label(ctx):
     r = Result(unit='절')
     for f in ctx.instruction_files():
@@ -650,7 +648,7 @@ def _section_label(ctx):
 
 # ── 생성물 ↔ 정본 대조 ──
 # 정본을 JSON 으로 내린 것은 손 동기화를 **없앤** 게 아니라 **검출기가 지키는 관계**로 바꾼 것이다.
-# 검출기 실행이 약속이면 앞선 판의 병이 데이터 층에서 반복된다 — 그래서 이 검사가 CI 에서 돈다.
+# 검출기 실행이 약속이면 손 동기화가 데이터 층에서 반복된다 — 그래서 이 검사가 CI 에서 돈다.
 
 @check('generated-up-to-date', '생성물 ↔ 정본 대조',
        '생성물을 손으로 고치는 것 (설계 "강제 지점" 표 · 리뷰 H3)')
@@ -723,10 +721,10 @@ def _shell_guard_header(ctx):
 
 # ── 두 매니페스트의 version 일치 ──
 # 어긋난 채 올리면 **한쪽만 바뀌는데 스크립트는 성공했다고 말한다.** 설치측은 marketplace.json 을
-# 보므로 업데이트가 전달되지 않는다(diag-C 1절). description 은 생성물이라 위 검사가 본다.
+# 보므로 업데이트가 전달되지 않는다. description 은 생성물이라 위 검사가 본다.
 
 @check('manifest-version-parity', '두 매니페스트 version 일치',
-       '어긋난 채 버전을 올리면 설치측에 업데이트가 전달되지 않는다 (diag-C 1절)')
+       '어긋난 채 버전을 올리면 설치측에 업데이트가 전달되지 않는다')
 def _manifest_parity(ctx):
     r = Result(unit='매니페스트')
     pj = os.path.join(ctx.root, 'plugins/flow/.claude-plugin/plugin.json')
@@ -830,8 +828,8 @@ def _topology_pending(ctx):
 
 
 # ── 커맨드 `## 연결` ↔ topology `loads` ──
-# 앞선 판 최다 실측 결함이 여기였다 — `## 연결` 절이 본문과 15+23건 어긋났는데 **검사기는 세 줄의
-# 존재만 봤다**(diag-A 2절). 존재 검사는 어긋남을 못 본다. 그래서 정본과 낱낱이 대조한다.
+# 여기가 가장 어긋나기 쉬운 자리다 — `## 연결` 절이 본문과 어긋나는데 **존재 검사는 세 줄의
+# 존재만 봤다**. 존재 검사는 어긋남을 못 본다. 그래서 정본과 낱낱이 대조한다.
 #
 # `modes` 가 있으면 모드마다 한 행이다 — 모드를 합쳐 적으면 "어느 모드에서 무엇을 싣나"가 사라진다.
 # `conditional` 은 **적히기만 하면 안 되고 조건이 같은 줄에 있어야 한다** — 조건이 없으면
@@ -860,7 +858,7 @@ def _loads_rows(loads):
 
 
 @check('command-loads-parity', '커맨드 연결 절 ↔ topology loads',
-       '앞선 판 최다 실측 결함 — 연결 절이 본문과 15+23건 어긋났고 검사기는 존재만 봤다 (diag-A 2절)')
+       '연결 절이 본문과 어긋나는 것 — 존재 검사는 그걸 못 본다')
 def _command_loads_parity(ctx):
     r = Result(unit='배선')
     t = _topo(ctx)
@@ -915,7 +913,7 @@ def _command_loads_parity(ctx):
                     extra.append(x)
 
             # **실재하지 않는 이름도 잡는다.** 예전에는 `named & ours` 라 실재 스킬일 때만
-            # 걸렸고 `zzz-fake` 같은 오타·환각은 조용히 통과했다(최종 검증 M3).
+            # 걸렸고 `zzz-fake` 같은 오타·환각은 조용히 통과했다.
             # 배선 표는 **읽을 것의 목록**이라, 없는 이름은 그 자리에서 아무것도 안 읽힌다.
             #
             # 표 행만 본다 — 절의 산문은 배선이 아니라 설명이고, 거기까지 잡으면
@@ -949,7 +947,7 @@ def _command_loads_parity(ctx):
 # ── 내용 조건을 두 시점에서 모은다 ──
 # **`entry.content` 만 보면 안 된다.** 내용 조건 5개는 전부 퇴장 조건이라 `exit.content` 로
 # 내려갔다(재설계 D5·T4). 여기를 `entry` 로만 두면 아래 검사들이 **대상 0건으로 조용히
-# 통과한다** — 그게 앞선 판이 앓던 사문화다. 두 자리를 union 으로 본다.
+# 통과한다** — 그게 사문화다. 두 자리를 union 으로 본다.
 def _content_items(c):
     """[(시점, 항목)] — 시점은 'entry' 또는 'exit'."""
     out = []
@@ -960,7 +958,7 @@ def _content_items(c):
 
 
 # ── gatekeeper 위임 지시가 있나 ──
-# 앞선 판 최대 결함 — 게이트를 4곳이 약속하고 실제로 거는 곳은 하나였다(diag-A 4절).
+# 게이트를 여러 곳이 약속하고 실제로 거는 곳이 하나면 그것은 게이트가 아니다.
 # 내용 조건은 **gatekeeper 가 판정하는 등급**이다. 그런데 부르는 것 자체는 약속이라
 # 기계가 못 막는다. 막을 수 있는 것은 **부르라는 지시가 본문에 있나** 와
 # **그 지시가 어느 항목을 넘기는지 id 로 적나** 까지다.
@@ -972,7 +970,7 @@ GK_CALL = re.compile(r'gatekeeper`?\s*(?:에이전트)?\s*(?:에|에게|를|을)
 
 
 @check('gatekeeper-delegation', 'gatekeeper 위임 지시',
-       '게이트를 약속만 하고 아무도 안 부르는 것 — 앞선 판 최대 결함 (diag-A 4절)')
+       '게이트를 약속만 하고 아무도 안 부르는 것')
 def _gatekeeper_delegation(ctx):
     r = Result(unit='커맨드')
     t = _topo(ctx)
@@ -1029,11 +1027,11 @@ def _gate_item_named(ctx):
 # ── entry.content 의 판정자가 진행하는 쪽인가 ──
 # `gatekeeper-delegation` 은 content 가 **있나** 와 부르라는 지시가 **있나** 만 본다.
 # 그래서 `who` 가 무엇이든 통과한다 — 실제로 `review` 의 `finding-severity` 가 `who=reviewer`
-# 였다. **발견을 만든 쪽이 자기 발견의 severity 를 판정한다**(재설계 D3).
+# 였다. **발견을 만든 쪽이 자기 발견의 severity 를 판정한다**.
 # `00.concept.md` 의 능력 2(판정 독립성)와 `01.architecture.md` 의 `자기 검증 금지` 가 그 원칙이다.
 #
 # **어느 `who` 가 허용인가 — 근거.** 현 5건 중 4건이 `gatekeeper` 고 하나만 달랐다.
-# 허용 목록을 이 스크립트에 손으로 열거하지 않는다(앞선 판의 화이트리스트 22개가 그렇게 사문화됐다).
+# 허용 목록을 이 스크립트에 손으로 열거하지 않는다 — 손으로 적은 화이트리스트는 사문화된다.
 # 정본은 `flow.topology.json` 의 `grades.content.judges` 다 — 그 등급의 뜻을 적어 둔 바로 그 자리다.
 #
 # **선언만으로는 못 막는다.** 데이터라 누구든 늘릴 수 있으니 `machine` 이 `enforcedBy` 로
@@ -1104,7 +1102,7 @@ def _gate_judge_independence(ctx):
 # 조건이었다 — `contract-followed`(구현을 해 봐야 안다) · `coverage-gap`(감사 결과 자체) ·
 # `requirement-covered`(설계를 해 봐야 안다). 진입 시점에는 판정할 대상이 없으니
 # `next` 의 전환 게이트가 원리상 판정 불가였다. 이름은 있고 아무도 판정할 수 없는 상태 —
-# 앞선 판의 *"게이트를 약속만 하고 아무도 안 부르는 것"* 의 변형이다.
+# *"게이트를 약속만 하고 아무도 안 부르는 것"* 의 변형이다.
 #
 # **기계가 볼 수 있는 것은 시점의 근거다.** 무엇이 언제 존재하는지는 못 읽지만,
 # *"이 조건이 판정하는 대상을 누가 만들었나"* 는 데이터로 적히면 대조할 수 있다.
@@ -1118,7 +1116,7 @@ def _gate_judge_independence(ctx):
 # 그 가지는 `lint.test.py` 의 위반 픽스처만 밟는다. 검사 전체의 대상은 exit 5건이라
 # 0건은 아니지만, **entry 가지는 픽스처로만 살아 있다**는 것을 여기 적어 둔다.
 @check('gate-timing', '내용 조건의 시점 ↔ 판정 대상',
-       '진입에서 판정할 대상이 없는 조건을 진입이라 적는 것 (재설계 D5)')
+       '진입에서 판정할 대상이 없는 조건을 진입이라 적는 것')
 def _gate_timing(ctx):
     r = Result(unit='내용 조건')
     t = _topo(ctx)
@@ -1167,7 +1165,7 @@ def _gate_timing(ctx):
 # 그래서 **고르기라는 변명이 성립하지 않는 세 자리만** 본다.
 #
 #   ① 조건부로 실은 스킬 — 그 상황일 때만 읽으므로 예산 논거가 없다. 상황이 오면 표가 정본이다
-#   ② 본체만 실은 스킬 — 이 판은 SKILL.md 가 라우터고 내용이 조각에 있다. 조각을 하나도 안 실으면
+#   ② 본체만 실은 스킬 — SKILL.md 가 라우터고 내용이 조각에 있다. 조각을 하나도 안 실으면
 #      그 스킬은 **이름만** 실린 것이다. 일부러 그런 것이면 `skills.<이름>.bodyOnly` 로 적는다
 #   ③ 커맨드가 직접 읽는 문서(본문·절차 조각)가 **읽으라고 지시한** 조각 — 인용이 아니라 지시다
 #
@@ -1236,9 +1234,9 @@ def _fragment_load_wired(ctx):
 
 
 @check('skill-loaded-body-only', '이름만 실린 스킬',
-       '조각을 하나도 안 싣고 라우터만 실어 규약이 안 읽히는 것 (W2 `배선이 끊긴 자리`)')
+       '조각을 하나도 안 싣고 라우터만 실어 규약이 안 읽히는 것')
 def _skill_loaded_body_only(ctx):
-    # ② 이 판은 규약을 조각으로 내렸다 — `SKILL.md` 는 대부분 **어느 조각을 읽나** 를 정하는 라우터다.
+    # ② 규약은 조각에 있다 — `SKILL.md` 는 대부분 **어느 조각을 읽나** 를 정하는 라우터다.
     # 조각을 하나도 안 싣고 스킬만 실으면 그 자리에서 읽히는 것은 라우팅표뿐이다.
     # **일부러 그렇게 하는 자리가 있다**(`theme-apply` 는 설계 국면에 토큰 정본 한 줄만 준다) —
     # 그건 `skills.<이름>.bodyOnly` 로 적고 `$bodyOnly-why` 로 왜인지 남긴다. 안 적으면 빠뜨린 것과
@@ -1421,7 +1419,7 @@ def _procedures_wired(ctx):
 # *모르는 사람이 도착하는 길*이고, 그 길의 정본이 이 파일의 `next` 간선이다.
 # 그래서 **진입점에서 `next` 간선을 따라 닿지 않는 커맨드는 도달 불가**로 본다.
 #
-# **진입점을 스크립트에 손으로 열거하지 않는다** — 앞선 판의 화이트리스트 22개가 그렇게 낡았다.
+# **진입점을 스크립트에 손으로 열거하지 않는다** — 손으로 적은 화이트리스트는 낡는다.
 # 정본은 데이터다: `commands.<이름>.entryPoint: true` 를 단 커맨드가 진입점이고, 왜 그런지를
 # `$entryPoint-why` 로 남긴다. 진입점을 늘려 검사를 무르게 만드는 길은 **`after` 가 막는다** —
 # 앞에 와야 하는 국면이 있는 커맨드는 진입점이 될 수 없다. 시작점인데 선행 조건이 있다는 말은
@@ -1511,8 +1509,8 @@ def _route_reachable(ctx):
 
 
 # ── 스킬 description 의 등급 ↔ 문형 ──
-# 앞선 판은 자율 7개 중 6개가 오발동 억제 신호(`/flow:X 가 쓴다`)를 달아 **등급이 사실상 뒤집혔다**
-# (diag-B 3-a). 이 판은 등급을 데이터로 두고 문형을 대조한다.
+# `자율` 이라 적고 오발동 억제 신호(`/flow:X 가 쓴다`)를 달면 **등급이 사실상 뒤집힌다.**
+# 그래서 등급을 데이터로 두고 문형을 대조한다.
 #
 # 등급을 `SKILL.md` frontmatter 의 비표준 필드로 둘 수 있는지는 이 세션에서 확인이 안 됐다
 # (설계 `description 등급` 절의 "구현 전 확인할 것"). 그래서 지시된 대체 자리인
@@ -1526,7 +1524,7 @@ SELF_CALL = re.compile(r'사용자가\s*직접|직접\s*(?:요청|부른)')
 
 
 @check('skill-description-grade', '스킬 등급 ↔ description 문형',
-       '앞선 판은 자율 7개 중 6개가 억제 신호를 달아 등급이 뒤집혔다 (diag-B 3-a)')
+       '자율이라 적고 억제 신호를 달면 등급이 뒤집힌다')
 def _skill_description_grade(ctx):
     r = Result(unit='스킬')
     t = _topo(ctx)
@@ -1550,19 +1548,19 @@ def _skill_description_grade(ctx):
         if grade == '호출-전용' and not listed:
             r.fail(f"문형 어긋남 {ctx.rel(p)} [호출-전용] — description 이 싣는 커맨드를 "
                    f"열거하지 않았다 (일반형은 기계가 대조할 수 없다 — "
-                   f"앞선 판의 '모든 커맨드가 쓴다'가 그렇게 통과했다)")
+                   f"'모든 커맨드가 쓴다' 같은 일반형은 대조할 짝이 없다)")
         if grade == '기본값' and listed:
             r.fail(f"문형 어긋남 {ctx.rel(p)} [기본값] — `/flow:"
                    f"{sorted(listed)[0]}` 를 열거했다. 기본값은 열거하지 않는다 "
                    f"(부분 열거는 '이것만 쓴다'로 읽혀 거짓말이 된다)")
         if grade == '자율' and not SELF_CALL.search(d):
             r.fail(f"문형 어긋남 {ctx.rel(p)} [자율] — 커맨드만 적고 직접 호출을 안 적었다 "
-                   f"(그것이 앞선 판에서 등급이 뒤집힌 자리다)")
+                   f"(억제 신호만 남으면 등급이 뒤집힌다)")
     return r
 
 
 # ── description 의 '누가 쓴다'가 사실인가 — 양방향 ──
-# 앞선 판 검사기는 **한 방향만** 봐서 "모든 커맨드가 쓴다"는 거짓이 통과했다. 매 턴 실리는 거짓말이다.
+# **한 방향만** 보면 "모든 커맨드가 쓴다"는 거짓이 통과한다. 매 턴 실리는 거짓말이다.
 # 조각만 싣는 것도 '쓴다'로 센다 — `doc-verify` 는 `/flow:design` 이 `canon-map` 조각만 읽는다.
 
 def _uses(t):
@@ -1578,7 +1576,7 @@ def _uses(t):
 
 
 @check('skill-description-users', "description 의 '누가 쓴다' 양방향",
-       '앞선 판은 한 방향만 봐서 거짓 주장이 매 턴 실렸다 (diag-B 3-g · 설계 커맨드↔스킬 연결도)')
+       '한 방향만 보면 거짓 주장이 매 턴 실린다')
 def _skill_description_users(ctx):
     r = Result(unit='스킬')
     t = _topo(ctx)
@@ -1647,7 +1645,7 @@ def _limits_single_canon(ctx):
 
     if not rows:
         r.fail("`guard-rules.json` 의 `limits` 가 비었다 — 못 막는 것을 안 적으면 "
-               "문서가 실제 방어보다 넓게 읽힌다 (diag-C 3절이 앞선 판에서 본 그 병이다)")
+               "문서가 실제 방어보다 넓게 읽힌다")
 
     def norm(s):
         # 서식·기호를 지운다. 같은 한계를 다르게 꾸며 적은 것을 같다고 보게 한다
@@ -1690,16 +1688,16 @@ def _limits_single_canon(ctx):
 
 
 # ── `machine` 등급이 실제로 배선됐나 ──
-# **앞선 판의 병이 여기서 재발했다.** 설계는 강제력을 3등급으로 갈랐는데, topology 에
+# **여기가 한 번 어긋났던 자리다.** 강제력을 3등급으로 갈랐는데 topology 에
 # `machine` 이라 적힌 진입 조건 7개 중 실제로 훅이 보는 것은 3개뿐이었고
 # 커맨드의 `## 진입 조건` 표는 5곳에 *"훅 — 경로 존재"* 라고 렌더하고 있었다.
 # 아무도 안 보는데 사용자에게는 기계라고 표시된 것이다 —
-# 앞선 판 README 가 "드리프트 4겹"이라 적고 AI 경로는 1겹이던 것과 같은 종류다.
+# "드리프트 4겹"이라 적고 AI 경로는 1겹인 것과 같은 종류다.
 #
 # 그래서 `machine` 을 다는 비용을 **배선 증명**으로 만든다. `enforcedBy` 로 무엇이
 # 강제하는지 적고, 그 훅이 실재하고 `hooks.json` 에 걸렸는지 여기서 대조한다.
 @check('machine-gate-wired', '`machine` 등급 ↔ 실제 훅 배선',
-       '강제하는 기계가 없는데 기계라고 적는 것 (최종 검증 H1 · diag-C 3절과 같은 병)')
+       '강제하는 기계가 없는데 기계라고 적는 것')
 def _machine_gate_wired(ctx):
     r = Result(unit='machine 조건')
     tp = os.path.join(ctx.root, 'plugins/flow/flow.topology.json')
@@ -1749,7 +1747,7 @@ def _machine_gate_wired(ctx):
             kind = eb.get('kind')
             if kind == 'git-hook':
                 # 우리가 심지만 **프로젝트가 설치해야** 도는 층이다. 조건을 안 적으면
-                # 미설치 프로젝트에서 없는 층을 기계로 읽는다 (최종 검증 M4).
+                # 미설치 프로젝트에서 없는 층을 기계로 읽는다.
                 if not eb.get('condition'):
                     r.fail(f"조건 없음 — commands.{name}.entry.machine `{iid}` 는 git 훅이라 "
                            f"프로젝트가 설치해야만 돈다. `enforcedBy.condition` 에 그 조건을 "
@@ -1962,7 +1960,7 @@ def _entry_grade_parity(ctx):
             dotted = f"{w or 'entry'}.{g}"
             r.fail(f"거짓 등급 표시 {ctx.rel(p)} — 본문은 `{_show(g, w)}` 이라 적는데 "
                    f"topology 의 `{dotted}` 가 비었다 (아무도 판정하지 않는 것을 판정한다고 "
-                   f"적는 것이 앞선 판의 병이다 — 내렸거나 시점을 옮겼으면 본문도 따라간다)")
+                   f"적는 것이 거짓 표시다 — 내렸거나 시점을 옮겼으면 본문도 따라간다)")
         for key in sorted(set(actual) - claimed - denied, key=_k):
             g, w = key
             r.fail(f"등급 누락 {ctx.rel(p)} — topology 의 `{w or 'entry'}.{g}` 에 "
@@ -1975,16 +1973,12 @@ def _entry_grade_parity(ctx):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# 앞선 판에서 늦게 되찾은 검사들
+# 늦게 되찾은 검사들
 #
-# 아래 다섯은 앞선 판 `lint-docs.py` 에 있었고 지금 첫 이식에서 빠졌다.
-# **진단(`diag-C`)의 잘못이다** — `남길 것` 에도 `버릴 것` 에도 안 적어 두 목록 사이로 샜고,
-# 구현은 진단을 따랐다. 되돌림 실험으로 전부 미탐임을 확인하고 되살린다
-# (`doc/00.diagnosis/review-v2-resume.md` 3-2).
+# 아래 다섯은 첫 이식에서 빠졌다가 되돌림 실험으로 전부 미탐임을 확인하고 되살린 것이다.
 #
-# **앞선 판 검사 8(절 참조 금지)은 되살리지 않는다.** 그 규칙의 전제가 이 판에서 깨졌다 —
-# 앞선 판은 스킬이 통째로 실려서 절 이름이 정보를 안 주고 깨질 자리만 만들었지만,
-# 이 판은 조각을 낱개로 싣는다. `` `traceability` 의 `level` `` 은 금지할 참조가 아니라
+# **절 참조 금지는 두지 않는다.** 그 규칙은 스킬이 통째로 실릴 때만 뜻이 있다 — 그때는
+# 절 이름이 정보를 안 주고 깨질 자리만 만든다. 지금은 조각을 낱개로 싣는다. `` `traceability` 의 `level` `` 은 금지할 참조가 아니라
 # **주소**다. 대신 그 주소가 실재하는지를 본다 (`fragment-reference-exists`).
 # ═══════════════════════════════════════════════════════════════════
 
@@ -1993,7 +1987,7 @@ FM_FILES = ('plugins/flow/commands/*.md', 'plugins/flow/agents/*.md',
 
 
 @check('frontmatter-lowercase', 'frontmatter 키 소문자',
-       '대문자 키를 Claude Code 가 못 읽어 커맨드·스킬이 안 뜬다 (앞선 판 검사 6)')
+       '대문자 키를 Claude Code 가 못 읽어 커맨드·스킬이 안 뜬다')
 def _frontmatter_lowercase(ctx):
     # `argument-hint-quoted` 와 같은 사고 계열이다 — **파일이 통째로 안 뜨고 조용하다.**
     # 그쪽만 이식되고 이쪽이 빠져 있었다.
@@ -2028,7 +2022,7 @@ def _anchors(path):
 
 
 @check('link-target-exists', '링크 대상·앵커 실존',
-       '헤딩 이름을 바꾸면 링크가 조용히 깨진다 (앞선 판 검사 1-2)')
+       '헤딩 이름을 바꾸면 링크가 조용히 깨진다')
 def _link_target_exists(ctx):
     r = Result(unit='링크')
     for f in ctx.render_files():
@@ -2055,9 +2049,9 @@ def _uncoded(line):
 
 
 @check('placeholder-leak', '자리표시자 유출',
-       '템플릿 밖의 `{{ }}` 를 사용자가 내용으로 읽는다 (앞선 판 검사 3)')
+       '템플릿 밖의 `{{ }}` 를 사용자가 내용으로 읽는다')
 def _placeholder_leak(ctx):
-    # 앞선 판은 "자리표시자를 설명하는 줄"을 낱말 목록으로 뺐다. 그 목록은 늘 모자란다 —
+    # "자리표시자를 설명하는 줄"을 낱말 목록으로 빼지 않는다. 그 목록은 늘 모자란다 —
     # 이 repo 만 해도 그 목록에 없는 형태로 일곱 곳이 자리표시자를 **인용**한다.
     # 백틱이 그 판정을 대신한다. 사용자가 내용으로 읽는 것은 **백틱 밖에 맨몸으로 있는 것**이다.
     r = Result(unit='자리표시자')
@@ -2079,7 +2073,7 @@ FRAG_REF = re.compile(r'`([a-z][a-z0-9-]*)`\s*의\s*`([^`]+)`')
 
 
 @check('fragment-reference-exists', '산문이 가리킨 조각 실존',
-       '없는 조각을 가리키면 그 자리에서 읽을 것이 사라진다 (앞선 판 검사 8 의 지금 판)')
+       '없는 조각을 가리키면 그 자리에서 읽을 것이 사라진다')
 def _fragment_reference_exists(ctx):
     # `command-loads-parity` 는 `## 연결` **표**만 본다. 절차·에이전트 본문의 산문 참조는
     # 아무도 안 봤다 — 조각 이름을 바꾸면 그쪽이 조용히 죽는다.
@@ -2102,7 +2096,7 @@ def _fragment_reference_exists(ctx):
 
 
 @check('plantuml-pragma', 'PlantUML 렌더 전제',
-       '`!pragma layout smetana` 가 없으면 Graphviz 없이 안 그려진다 (앞선 판 검사 5)')
+       '`!pragma layout smetana` 가 없으면 Graphviz 없이 안 그려진다')
 def _plantuml_pragma(ctx):
     r = Result(unit='블록')
     for f in ctx.render_files():
@@ -2122,7 +2116,7 @@ FLUFF = re.compile(r'(?<![가-힣])(매우|아주|정말|굉장히|훨씬|상당
 
 
 @check('fluff', '미사여구',
-       '뜻을 안 더하는 강조가 지시서에 실린다 (`plain-writing` · 앞선 판 검사 11)')
+       '뜻을 안 더하는 강조가 지시서에 실린다 (`plain-writing`)')
 def _fluff(ctx):
     r = Result(unit='줄')
     for f in ctx.instruction_files():
@@ -2148,7 +2142,7 @@ def _fluff(ctx):
 # 검사기는 초록인데 **배포본에서만 사라진다.** 실제로 그랬다:
 # 사용자 전역 `~/.gitignore_global` 의 `build/` 가 `procedures/build/` 조각 둘을 삼켰고,
 # `fragment-reference-exists`·`command-loads-parity` 는 디스크를 보므로 통과했다.
-# 앞선 판도 같은 형태로 `project-template/.claude/` 를 잃을 뻔했다(`.gitignore` 의 되살리기 규칙).
+# `project-template/.claude/` 도 같은 형태로 잃을 뻔했다(`.gitignore` 의 되살리기 규칙).
 @check('plugin-files-tracked', '배포 파일이 git 에 있나',
        '전역 gitignore 가 삼키면 검사기는 통과하는데 배포본에서 사라진다')
 def _plugin_files_tracked(ctx):
@@ -2197,7 +2191,7 @@ def _plugin_files_tracked(ctx):
 def _fragment_read_instructed(ctx):
     # **범위가 이 검사의 전부다.** 처음에 본문 전체에서 이름을 찾게 만들었더니
     # `## 연결` 표가 그 조건을 이미 만족시켜 **사보타주가 통과했다** — 읽기 목록을 24줄 지워도
-    # 초록이었다. 앞선 판이 사문화된 검사를 갖고 있던 것과 같은 형태다.
+    # 초록이었다. 그게 사문화된 검사의 형태다.
     # 그래서 **읽기 절 안** 과 **그 커맨드가 싣는 절차 조각** 만 본다. 표는 세지 않는다.
     r = Result(unit='조각')
     topo = _topo(ctx)

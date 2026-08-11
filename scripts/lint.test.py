@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """lint.py 자기 테스트 — 검사마다 통과 픽스처 1 + 위반 픽스처 1.
 
-앞선 판은 `lint-docs.py` 가 전부 통과하는 상태에서 검사 하나가 **사문화**돼 있었다.
-어떤 입력에도 실패하지 않는데 통과 숫자로는 구별되지 않았다(`diag-C` 2절·4절).
+검사가 전부 통과하는 상태에서도 검사 하나가 **사문화**될 수 있다.
+어떤 입력에도 실패하지 않는데 통과 숫자로는 구별되지 않는다.
 이 파일이 그 길을 막는다.
 
 세 가지를 확인한다.
@@ -154,7 +154,7 @@ def _built(corrupt=False):
 
 
 def _review_skill(sections, pair='06.review'):
-    """출력 형식을 **조각**(`references/`)에 둔다 — 이 판이 거기로 내렸다.
+    """출력 형식을 **조각**(`references/`)에 둔다 — 정본이 거기다.
 
     짝은 topology 의 `output_templates` 가 정본이다. `pair=None` 이면 짝을 안 적은 상태다.
     """
@@ -569,7 +569,7 @@ CASES = {
          **_cmd_md([('스킬', '없다')],
                    tail="- **내용 · 퇴장** — `contract-followed`. "
                         "`gatekeeper` 에 넘긴다. 반드시 부른다.\n\n")},
-        # 내용 조건이 있는데 부르라는 지시가 없다 = 게이트가 이름만 남았다 (앞선 판 최대 결함)
+        # 내용 조건이 있는데 부르라는 지시가 없다 = 게이트가 이름만 남았다
         {**_cmd_topo({'skills': [], 'fragments': []}, content=[_GK_ITEM]),
          **_cmd_md([('스킬', '없다')],
                    tail="- **내용 · 퇴장** — `contract-followed` 를 이 커맨드가 확인한다.\n\n")},
@@ -648,14 +648,14 @@ CASES = {
     # 대상이 `ctx.skills()` 로 되돌아가면 통과 픽스처가 **대상 0건**이 되어 테스트가 실패한다.
     'skill-duplication': (
         _dup(copy=False),
-        # 커맨드가 조각의 규약 문장을 그대로 옮겼다 = 정본이 둘 (W2 `prd` ↔ `coverage`)
+        # 커맨드가 조각의 규약 문장을 그대로 옮겼다 = 정본이 둘
         _dup(copy=True),
     ),
 
     # ── entry.content 판정자 독립성 ──
     'gate-judge-independence': (
         _judge('gatekeeper'),
-        # 발견을 만드는 `reviewer` 가 자기 발견의 등급을 판정한다 (재설계 D3)
+        # 발견을 만드는 `reviewer` 가 자기 발견의 등급을 판정한다
         _judge('reviewer'),
     ),
 
@@ -733,7 +733,7 @@ CASES = {
         _built(corrupt=True),
     ),
 
-    # ── 앞선 판에서 늦게 되찾은 검사 (review-v2-resume 3-2) ──
+    # ── 늦게 되찾은 검사 ──
     'frontmatter-lowercase': (
         {'plugins/flow/commands/build.md':
             "---\nname: build\ndescription: 구현한다\n---\n\n# build\n"},
