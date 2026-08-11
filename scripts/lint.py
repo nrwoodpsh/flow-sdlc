@@ -2240,6 +2240,49 @@ def _fragment_read_instructed(ctx):
                        f"절차 조각도 이름으로 가리키지 않는다")
     return r
 
+# ── 어휘 정본이 실재하나 ──
+# `doc-verify/vocabulary` 가 *값 집합 → 정본 조각* 지도를 갖는다. **지도가 낡으면 대조가 거짓이 된다** —
+# 정본 조각에서 값이 빠졌는데 지도는 그대로면, 채점이 "정본에 있다" 고 믿고 넘어간다.
+# 그래서 지도의 각 행을 **그 조각이 실제로 그 값들을 담고 있나**로 대조한다.
+# 지도 자체가 F2(조각 미적재)를 산출물 쪽에서 잡으려고 만든 것이라, 지도가 썩으면 그 방어가 사라진다.
+VOCAB = 'plugins/flow/skills/doc-verify/references/vocabulary.md'
+
+
+@check('vocabulary-canon', '어휘 지도 ↔ 정본 조각',
+       '지도가 낡으면 값 대조가 거짓이 된다 (F2 를 산출물 쪽에서 잡는 유일한 길)')
+def _vocabulary_canon(ctx):
+    r = Result(unit='값 집합')
+    vp = os.path.join(ctx.root, VOCAB)
+    if not os.path.isfile(vp):
+        return r
+    rows = [l for l in ctx.lines(vp) if l.startswith('|') and not SEP.match(l)]
+    for l in rows[1:]:                       # 머리글 제외
+        cells = [c.strip() for c in l.strip('|').split('|')]
+        if len(cells) < 3:
+            continue
+        values, canon = cells[1], cells[2]
+        # 정본 칸에서 조각 이름을 뽑는다 — `skills/x/references/y.md` 든 `x/y` 든
+        m = re.search(r'`([a-z-]+)/([a-z-]+)`', canon)
+        if not m:
+            continue                          # topology 를 정본으로 적은 행 등은 대상이 아니다
+        r.targets += 1
+        fp = os.path.join(ctx.root, f'plugins/flow/skills/{m.group(1)}/references/{m.group(2)}.md')
+        if not os.path.isfile(fp):
+            r.fail(f"어휘 정본 없음 {VOCAB} — `{m.group(1)}/{m.group(2)}` 가 디스크에 없다")
+            continue
+        body = ctx.read(fp)
+        # 값 칸의 백틱·굵게 안 토큰이 그 조각에 실제로 있나
+        toks = [t for t in re.findall(r'`([^`]+)`|\*\*([^*]+)\*\*', values)]
+        toks = [a or b for a, b in toks]
+        # 설명 토큰(`표기 없음(=선택)` 처럼 괄호가 든 것)은 값이 아니다
+        toks = [t for t in toks if '(' not in t and t not in ('비움',)]
+        miss = [t for t in toks if t not in body]
+        if miss:
+            r.fail(f"어휘 정본에 값이 없다 {m.group(1)}/{m.group(2)} — {miss} "
+                   f"(지도는 이 조각을 정본이라 적는다. 값이 옮겨졌으면 지도를 고친다)")
+    return r
+
+
 # ── 실행 ──
 
 def run(ctx, only=None):

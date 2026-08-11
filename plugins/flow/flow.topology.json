@@ -726,7 +726,8 @@
               "usecase/rule-level",
               "traceability/coverage",
               "ops-doc/postmortem",
-              "default-reference/delegation"
+              "default-reference/delegation",
+              "doc-verify/vocabulary"
             ],
             "conditional": {
               "traceability/reverse-check": "역추출 문서를 채점할 때만"
@@ -959,7 +960,8 @@
       "fragments": [
         "canon-map",
         "grade",
-        "scoring"
+        "scoring",
+        "vocabulary"
       ],
       "grade": "호출-전용"
     },

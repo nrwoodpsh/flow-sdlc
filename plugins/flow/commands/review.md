@@ -21,7 +21,7 @@ argument-hint: '[doc | deep] [파일/도메인/유닛 경로 (선택 — 없으�
 | 대상 | 스킬 | 조각 |
 |:--|:--|:--|
 | 코드 | `code-review` · `code-graph` · `testing` · `plain-writing` · `default-reference` | `code-review/layers` · `code-review/severity` · `code-review/checklist` · `code-graph/query` · `code-graph/service-boundary` · `testing/run` · `default-reference/delegation` |
-| 문서 | `doc-verify` · `usecase` · `traceability` · `ops-doc` · `plain-writing` · `default-reference` | `doc-verify/grade` · `doc-verify/scoring` · `doc-verify/canon-map` · `usecase/granularity` · `usecase/figure-scope` · `usecase/rule-level` · `traceability/coverage` · `ops-doc/postmortem` · `default-reference/delegation` · (조건 — 역추출 문서를 채점할 때만) `traceability/reverse-check` |
+| 문서 | `doc-verify` · `usecase` · `traceability` · `ops-doc` · `plain-writing` · `default-reference` | `doc-verify/grade` · `doc-verify/scoring` · `doc-verify/canon-map` · `usecase/granularity` · `usecase/figure-scope` · `usecase/rule-level` · `traceability/coverage` · `ops-doc/postmortem` · `default-reference/delegation` · (조건 — 역추출 문서를 채점할 때만) `traceability/reverse-check` · `doc-verify/vocabulary` |
 
 | 무엇 | 이름 |
 |:--|:--|
@@ -70,7 +70,7 @@ argument-hint: '[doc | deep] [파일/도메인/유닛 경로 (선택 — 없으�
 - **코드 모드** `code-graph` — `references/query.md` · `references/service-boundary.md`
 - **코드 모드** `testing` — `references/run.md`
 - **코드 모드** `default-reference` — `references/delegation.md`
-- **문서 모드** `doc-verify` — `references/grade.md` · `references/scoring.md` · `references/canon-map.md`
+- **문서 모드** `doc-verify` — `references/grade.md` · `references/scoring.md` · `references/canon-map.md` · `references/vocabulary.md`
 - **문서 모드** `usecase` — `references/granularity.md` · `references/figure-scope.md` · `references/rule-level.md`
 - **문서 모드** `traceability` — `references/coverage.md`
 - **문서 모드** `ops-doc` — `references/postmortem.md`

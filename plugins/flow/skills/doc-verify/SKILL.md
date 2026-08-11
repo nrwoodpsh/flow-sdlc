@@ -14,6 +14,7 @@ description: 작성된 문서를 그 유형의 템플릿과 대조해 PASS/FAIL 
 | 이 상황이면 | 반드시 읽는다 |
 |:--|:--|
 | 문서를 **채점한다** — 항목별로 PASS/FAIL 을 매긴다 | `references/scoring.md` |
+| 산출물의 값이 규약에서 온 것인가 | `references/vocabulary.md` |
 | **차단할지만 판정한다** — `gatekeeper` 가 국면 전환을 막나 | `references/grade.md` |
 | **같은 값이 두 문서에 있다** — 어느 쪽이 정본인가 | `references/canon-map.md` |
 

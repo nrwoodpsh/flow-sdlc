@@ -495,6 +495,17 @@ def _read_instr(named):
             'plugins/flow/commands/build.md': body}
 
 
+def _vocab(canon_has_value):
+    """어휘 지도 + 정본 조각. `canon_has_value=False` 면 조각에서 값이 빠진 상태다."""
+    body = "# 등급\n\n" + ("`critical` 이 가장 높다.\n" if canon_has_value else "등급이 넷 있다.\n")
+    return {'plugins/flow/skills/doc-verify/references/vocabulary.md':
+                ("# 어휘 정본\n\n"
+                 "| 값 집합 | 허용된 값 | 정본 조각 | 산출물 어디 |\n"
+                 "|:--|:--|:--|:--|\n"
+                 "| 리뷰 등급 | `critical` | `code-review/severity` | `6.review/` |\n"),
+            'plugins/flow/skills/code-review/references/severity.md': body}
+
+
 CASES = {
     # ── 표 렌더 4종 ──
     'table-columns': (
@@ -784,6 +795,13 @@ CASES = {
         _read_instr(named=True),
         # 표에만 있고 본문이 이름으로 안 가리킨다 — 실측에서 0/7 이 난 상태다
         _read_instr(named=False),
+    ),
+
+    # ── 어휘 지도 ↔ 정본 조각 ──
+    'vocabulary-canon': (
+        _vocab(canon_has_value=True),
+        # 지도는 이 조각을 정본이라 적는데 값이 그 안에 없다 — 대조가 거짓이 된다
+        _vocab(canon_has_value=False),
     ),
 }
 
