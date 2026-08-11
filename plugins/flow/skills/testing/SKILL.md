@@ -5,7 +5,7 @@ description: 테스트를 명세하고 실제로 돌려 Exit code 로 판정한�
 
 # 테스트 명세와 실행
 
-v1 은 이 규약을 `tdd-verify`·`test-spec` 둘로 나눠 뒀는데 `build`·`verify` 가 **항상 둘을 같이** 실었다. 하나로 둔다.
+앞선 판은 이 규약을 `tdd-verify`·`test-spec` 둘로 나눠 뒀는데 `build`·`verify` 가 **항상 둘을 같이** 실었다. 하나로 둔다.
 
 **실행하지 않은 것은 검증이 아니다.** "통과할 것입니다"라는 추론은 판정이 아니고, 실행은 `verifier` 에이전트가 격리해서 한다.
 

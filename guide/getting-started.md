@@ -33,7 +33,7 @@
 | `/flow:spike` | 되는지 모르는 것을 **버릴 코드**로 확인 | `spike/` · ADR |
 | `/flow:publish` | 결과를 외부로 발행 | 외부 페이지 |
 
-- **v1 에서 바뀐 것**: `ask` 와 `run` 이 `/flow:next` 로, `spec` 이 `/flow:design` 으로 합쳐졌고, `/flow:theme` 은 `theme-apply` 스킬이 됐다.
+- **앞선 판에서 바뀐 것**: `ask` 와 `run` 이 `/flow:next` 로, `spec` 이 `/flow:design` 으로 합쳐졌고, `/flow:theme` 은 `theme-apply` 스킬이 됐다.
 - **어느 커맨드 다음에 무엇이 오나는 `flow.topology.json` 이 정본이다.** 헤매면 `/flow:next` 가 그것을 읽어 답한다.
 
 ### 에이전트 — 대신 일하는 것

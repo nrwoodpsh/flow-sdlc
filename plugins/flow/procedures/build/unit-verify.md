@@ -1,6 +1,6 @@
 # /flow:build — 단위 검증
 
-`/flow:build` 의 구현↔검증 루프가 읽는 조각이다. v1 `verify unit` 이 하던 일이 여기로 왔다.
+`/flow:build` 의 구현↔검증 루프가 읽는 조각이다. 앞선 판 `verify unit` 이 하던 일이 여기로 왔다.
 **실행하지 않은 것은 검증이 아니다** — 판정 규약은 `testing/run`, 케이스와 기대값의 출처는 `testing/case-source` 가 정본이다.
 
 ## 테스트 먼저

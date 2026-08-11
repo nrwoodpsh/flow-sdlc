@@ -4,7 +4,7 @@
     "  guard-danger.sh   이 파일을 읽어 판정한다 (case 문에 열거하지 않는다)",
     "  hooks.test.sh     expect 를 읽어 케이스를 만든다 (손으로 적지 않는다)",
     "  README·CLAUDE.md  차단표를 이 파일에서 생성한다",
-    "v1 은 같은 목록이 셸 case 문 + 산문 5곳에 복제되어 하나 늘리는 비용이 9곳이었다.",
+    "앞선 판은 같은 목록이 셸 case 문 + 산문 5곳에 복제되어 하나 늘리는 비용이 9곳이었다.",
     "그래서 아무도 안 늘렸고 미탐 9건이 남았다 (diag-C 4절).",
     "",
     "규칙 하나 늘리는 법: rules 에 한 줄, expect 에 최소 한 줄. 그게 전부다.",
@@ -16,22 +16,22 @@
     "irreversible": {
       "level": "block",
       "뜻": "되돌릴 수 없다 — 실행하면 복구 경로가 없거나 사람 손이 필요하다",
-      "v1": "이 등급만 있었다"
+      "앞선 판": "이 등급만 있었다"
     },
     "defense-off": {
       "level": "block",
       "뜻": "다른 방어 층을 끈다 — AI 가 스스로 감시를 벗는 길이다",
-      "v1": "없었다. diag-C 3절 실측 미탐 — --no-verify · -c core.hooksPath="
+      "앞선 판": "없었다. diag-C 3절 실측 미탐 — --no-verify · -c core.hooksPath="
     },
     "external-state": {
       "level": "block",
       "뜻": "우리 저장소 밖에 상태를 만든다 — 남이 보고 반응한다",
-      "v1": "없었다. diag-C 3절 실측 미탐 — gh pr/issue/repo create · workflow run"
+      "앞선 판": "없었다. diag-C 3절 실측 미탐 — gh pr/issue/repo create · workflow run"
     },
     "judgement": {
       "level": "ask",
       "뜻": "판단이 갈린다 — 정상 작업일 때가 있어서 무조건 막으면 사람이 훅을 끈다",
-      "v1": "없었다. 등급이 하나라 '막거나 안 보거나' 둘뿐이었다"
+      "앞선 판": "없었다. 등급이 하나라 '막거나 안 보거나' 둘뿐이었다"
     }
   },
 
@@ -195,7 +195,7 @@
       "why": "drift 훅을 끈다 — 문서가 낡은 채 커밋되고 다음 세션이 그걸 진실로 믿는다.",
       "advice": "훅을 끄지 말고 /flow:sync 로 문서를 맞추세요. 정말 넘겨야 하면 사람이 자기 터미널에서 합니다.",
       "note": "`on: rest` 여야 한다 — 세그먼트 전체를 보면 `nice -n 10 git commit` 의 `-n` 이 얹히고, 커밋 메시지 안의 `-n` 도 얹힌다. `-n` 은 commit 에서 --no-verify 의 짧은 이름이라 같이 막는다.",
-      "diag": "diag-C 3절 실측 미탐. v1 은 /flow:commit 자신이 이걸 붙였다"
+      "diag": "diag-C 3절 실측 미탐. 앞선 판은 /flow:commit 자신이 이걸 붙였다"
     },
     {
       "id": "git-hooks-off",
@@ -317,7 +317,7 @@
       "label": "git commit --amend",
       "why": "직전 커밋을 다시 쓴다 — 아직 push 안 했으면 정상 작업이고, 했으면 이력 사고다.",
       "advice": "아직 push 하지 않은 커밋이면 안전합니다. push 한 커밋이면 남의 이력과 갈라집니다.",
-      "diag": "diag-C 3절 실측 미탐 — v1 은 rebase 는 막고 이건 안 막았다"
+      "diag": "diag-C 3절 실측 미탐 — 앞선 판은 rebase 는 막고 이건 안 막았다"
     },
     {
       "id": "git-tag-delete",
@@ -481,7 +481,7 @@
 
   "$limits-note": [
     "**막지 못하는 것을 여기 적는다. 이 목록이 limits 의 유일한 정본이다.**",
-    "v1 은 셸 우회만 한계로 적고 목록에서 빠진 명령은 한계로도 적지 않았다 —",
+    "앞선 판은 셸 우회만 한계로 적고 목록에서 빠진 명령은 한계로도 적지 않았다 —",
     "그래서 문서가 실제 방어보다 넓게 읽혔다(diag-C 3절).",
     "",
     "**`guard-danger.sh` 머리말에 `limit:` 줄을 넣지 마라.** 한때 거기에도 8줄이 있었고",

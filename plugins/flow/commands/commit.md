@@ -29,7 +29,7 @@ argument-hint: '[커밋 메시지 힌트 (선택)]'
 - **내용** — 없다. `entry.content`·`exit.content` 가 둘 다 비어 있으니 **여기서 `gatekeeper` 를 부르지 않는다.** 부를 자리를 만들려면 `flow.topology.json` 에 먼저 적는다 — 커맨드 본문이 게이트를 발명하지 않는다.
 - **약속** — 없다.
 
-**훅이 막으면 거기서 멈춘다.** v1 은 이 자리에서 커맨드가 `git commit --no-verify` 를 붙여 **자기 방어층을 껐다.** v2 는 붙이지 않는다 — 가드가 `--no-verify` 와 `core.hooksPath` 를 차단하고, 그게 정상이다.
+**훅이 막으면 거기서 멈춘다.** 앞선 판은 이 자리에서 커맨드가 `git commit --no-verify` 를 붙여 **자기 방어층을 껐다.** 이 판은 붙이지 않는다 — 가드가 `--no-verify` 와 `core.hooksPath` 를 차단하고, 그게 정상이다.
 
 | 막혔을 때 | 어떻게 |
 |:--|:--|

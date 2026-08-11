@@ -55,7 +55,7 @@ SKILL.md 가 이름 짚는 `references/*.md` 전부 실재. 유일한 외부 참
 | 빠진 것 | 영향 |
 |:--|:--|
 | `LICENSE` 파일 없음 | plugin.json 이 `"license": "MIT"`를 선언하는데 파일이 없다(v1엔 있음). 로드는 막지 않음 |
-| **git remote 없음** | git 소스 add 불가. 로컬 경로 add(`/plugin marketplace add /Users/soulers/WKSPCES/flow-sdlc-v2`)나 `--plugin-dir`만 가능 |
+| **git remote 없음** | git 소스 add 불가. 로컬 경로 add(`/plugin marketplace add {당시 작업 경로}`)나 `--plugin-dir`만 가능 |
 | `.claude/` 없음 | 이미 알던 것 |
 
 플러그인 파일 125개 전부 git 추적 중이고 트리가 깨끗하다 — 커밋 누락으로 안 실리는 파일은 없다.

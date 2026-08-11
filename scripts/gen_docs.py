@@ -10,7 +10,7 @@
 
   README.md         `guard-table`    차단표 전체 — `JSON 정본` 절 + `셸 정본` 절 + 한계
   CLAUDE.md         `guard-summary`  압축판. **이 파일은 매 턴 실린다** — 표를 다 싣지 않는다
-                                     (v1 은 project-template/CLAUDE.md 3093자 중 54%가
+                                     (앞선 판은 project-template/CLAUDE.md 3093자 중 54%가
                                       가드레일 절이었고 차단 목록이 산문·표로 두 번 나왔다)
   plugin.json       description      `flow.topology.json` 의 manifest 절에서
   marketplace.json  description      같은 값 — 두 파일이 어긋나면 업데이트가 전달되지 않는다
@@ -121,7 +121,7 @@ def limit_rows(gr):
     """`guard-rules.json` 의 `limits` — **한계의 유일한 정본**.
 
     `{what, why}` 가 정상 형태다. 옛 문자열 형태도 받아 준다(왜는 `—`) — 형태 하나 때문에
-    한계가 표에서 사라지면 문서가 실제 방어보다 넓게 읽힌다. 그게 v1 의 병이다.
+    한계가 표에서 사라지면 문서가 실제 방어보다 넓게 읽힌다. 그게 앞선 판의 병이다.
     """
     out = []
     for x in gr.get('limits') or []:
@@ -331,7 +331,7 @@ def write(root):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description='정본에서 생성물 만들기 (flow v2)')
+    ap = argparse.ArgumentParser(description='정본에서 생성물 만들기 (flow)')
     ap.add_argument('--root', default=REPO)
     ap.add_argument('--check', action='store_true', help='어긋나면 exit 1')
     ap.add_argument('--write', action='store_true', help='생성물을 다시 쓴다')
