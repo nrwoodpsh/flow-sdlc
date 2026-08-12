@@ -15,7 +15,8 @@
 #   하나만 고치면 "로컬은 통과, CI는 차단" 같은 어긋남이 생긴다.
 #   규칙: ① drift.ignore 에 맞으면 소스 아님
 #         ② drift.sourceGlobs 가 있으면 그 안만 소스
-#         ③ 없으면 doc/·spike/·.claude/·.github/ 밖이고 .md 아닌 것
+#         ③ 없으면 doc/·spike/·.claude/·.github/ 밖이고 .md·.test.* 아닌 것
+#            (③ 의 정본은 flow.topology.json 의 gate.source — defaultIgnore ∪ defaultNonSource)
 #         ④ doc/01.work/ 에 유닛이 하나도 없으면 검사 자체를 건너뛴다
 #         문서는 doc/01.work/ 아무거나 인정 (2.task·3.contract·7.summary)
 #
@@ -66,7 +67,10 @@ jobs:
             if (any(f, ignore)) return false;
             if (sourceGlobs.length) return any(f, sourceGlobs);
             if (/^(doc|spike|\.claude|\.github)\//.test(f)) return false;
-            if (/\.md$/.test(f)) return false;
+            // 파일명만 본다 — `**/*.md`·`**/*.test.*` 는 basename 규칙이다
+            const base = f.split('/').pop();
+            if (/\.md$/.test(base)) return false;
+            if (/\.test\./.test(base)) return false;
             return true;
           };
 

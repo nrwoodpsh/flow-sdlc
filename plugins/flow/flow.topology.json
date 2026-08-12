@@ -121,6 +121,20 @@
       ]
     },
     "source": {
+      "$canon-note": [
+        "**이 값들이 소스 판정의 정본이다. 구현이 셋이다** —",
+        "  gate-source-write.sh    이 두 키를 직접 읽는다",
+        "  drift-hook.sh           config 만 읽고, 없으면 자기 폴백 case (여기와 같아야 한다)",
+        "  drift-gate.yml.example  같은 규칙의 JS 판",
+        "hooks.test.sh 의 `세 구현 나란히 판정` 이 이 키에서 케이스를 만들어 셋을 대조하고,",
+        "lint.py 의 `gate-source-canon` 이 drift-check/references/rule.md 의 규칙 표와 대조한다.",
+        "한 곳만 고치면 둘 중 하나가 실패한다 — 실제로 `**/*.test.*` 가 drift-hook 폴백에만",
+        "빠져 있었고 같은 파일에 두 훅이 다른 답을 냈는데 425 케이스가 전부 통과했다.",
+        "",
+        "**알려진 비대칭**: gate-source-write.sh 는 `.md` 를 코드에서도 한 번 더 뺀다 —",
+        "`drift.ignore` 를 사용자가 적으면 defaultIgnore 가 통째로 대체되는데 `.md` 만은 그때도",
+        "빠진다. defaultIgnore 의 나머지(`**/*.test.*`)는 그 경우 사라진다. 문서화만 해 둔다."
+      ],
       "configKey": "drift.sourceGlobs",
       "ignoreKey": "drift.ignore",
       "defaultIgnore": [

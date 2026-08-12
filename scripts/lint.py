@@ -2277,6 +2277,66 @@ def _vocabulary_canon(ctx):
     return r
 
 
+# ── gate.source 정본 ↔ 산문 대조 ──
+# 소스 판정 규칙이 **다섯 곳**에 있다: topology 의 `gate.source`(정본) · gate-source-write.sh ·
+# drift-hook.sh · drift-gate.yml.example · drift-check/references/rule.md.
+# 구현 셋은 `hooks.test.sh` 의 `세 구현 나란히 판정` 이 topology 에서 케이스를 만들어 행동으로
+# 대조한다. 검사기는 훅을 못 돌리므로 **산문 쪽**을 맡는다 — 정본에 있는 값이 규칙 표에
+# 안 적혀 있거나, 표에만 있는 값이 있으면 실패시킨다.
+#
+# 왜 필요한가: `**/*.test.*` 가 정본에는 있고 drift-hook 폴백에는 없어서 같은 파일에 두 훅이
+# 다른 답을 냈는데 425 케이스가 전부 통과했다. 아무도 정본을 안 봤기 때문이다.
+GATE_RULE_DOC = 'plugins/flow/skills/drift-check/references/rule.md'
+
+
+@check('gate-source-canon', 'gate.source 정본 ↔ 판정 규칙 산문',
+       '정본에 있는 소스 판정 값이 규칙 문서에 안 적혀 조용히 갈리는 것')
+def _gate_source_canon(ctx):
+    r = Result(unit='정본 값')
+    topo = _topo(ctx)
+    if not topo:
+        return r
+    src = ((topo.get('gate') or {}).get('source') or {})
+    canon = [str(x) for x in (src.get('defaultIgnore') or [])] + \
+            [str(x) for x in (src.get('defaultNonSource') or [])]
+    r.targets = len(canon)
+    if not canon:
+        r.fail('topology 의 `gate.source` 에 defaultIgnore·defaultNonSource 가 둘 다 비었다 — '
+               '기본 소스 판정의 정본이 사라졌다')
+        return r
+
+    dp = os.path.join(ctx.root, GATE_RULE_DOC)
+    if not os.path.isfile(dp):
+        r.fail(f'판정 규칙 문서가 없다 — {GATE_RULE_DOC} (정본을 대조할 산문이 사라졌다)')
+        return r
+    body = ctx.read(dp)
+
+    # 산문에 백틱으로 적힌 값만 본다 — 문장 속 우연한 일치를 세지 않는다
+    quoted = set(re.findall(r'`([^`]+)`', body))
+
+    for v in canon:
+        if v in quoted:
+            continue
+        # `spike/**` 를 `spike/` 로 적은 것처럼 접두가 같으면 인정한다
+        base = v.rstrip('*').rstrip('/')
+        if base and any(q.rstrip('*').rstrip('/') == base for q in quoted):
+            continue
+        r.fail(f'정본에만 있다 {ctx.rel(dp)} — topology 의 `gate.source` 가 `{v}` 를 정하는데 '
+               f'판정 규칙 문서가 그 값을 안 적는다 (구현은 이 문서를 읽고 만든다)')
+
+    # 반대 방향 — **기본값이라 주장하는 줄**만 본다. `sourceGlobs` 예시(`src/**`·`app/**`)는
+    # 기본값이 아니라 사용자 설정 예시라 정본에 없는 것이 정상이다.
+    default_lines = [l for l in body.split('\n') if '기본' in l]
+    like_glob = {q for l in default_lines for q in re.findall(r'`([^`]+)`', l)
+                 if re.fullmatch(r'\*\*/\*\.[A-Za-z0-9.*]+|[A-Za-z0-9._-]+/\*\*', q)}
+    cset = set(canon)
+    for q in sorted(like_glob - cset):
+        r.fail(f'문서에만 있다 {ctx.rel(dp)} — `{q}` 를 기본값처럼 적는데 topology 의 '
+               f'`gate.source` 에 없다 (정본에 넣거나 문서에서 빼라)')
+    return r
+
+
+
 # ── 실행 ──
 
 def run(ctx, only=None):

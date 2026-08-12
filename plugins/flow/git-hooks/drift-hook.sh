@@ -70,7 +70,14 @@ matches_any() {
 # 소스 판정 — 판정 규칙 정본은 `drift-check` 스킬이다. 여기와 CI(drift-gate.yml)를 함께 맞춘다.
 #   ① drift.ignore 에 맞으면 소스가 아니다 (기본: **/*.md · **/*.test.* · spike/**)
 #   ② drift.sourceGlobs 가 있으면 그 안에 있는 것만 소스
-#   ③ 없으면 기본값 — doc/ · spike/ · .claude/ · .github/ 밖이고 .md 가 아닌 것
+#   ③ 없으면 기본값 — doc/ · spike/ · .claude/ · .github/ 밖이고 .md·.test.* 가 아닌 것
+#
+# **③ 의 목록은 flow.topology.json 의 `gate.source` 가 정본이다.**
+# defaultIgnore(**/*.md · **/*.test.* · spike/**) ∪ defaultNonSource(doc/ · spike/ · .claude/ · .github/)
+# 와 같아야 한다 — 쓰기 게이트(gate-source-write.sh)는 그 두 키를 읽는데 이 훅은 config 만 읽으므로,
+# ③ 이 그 합집합과 어긋나면 같은 파일에 두 훅이 다른 답을 낸다. 실제로 `**/*.test.*` 가 빠져 있었고
+# `drift.ignore` 를 안 적은 프로젝트에서 쓰기 게이트는 통과, 이 훅은 차단이었다.
+# hooks.test.sh 의 `세 구현 나란히 판정` 이 topology 에서 케이스를 만들어 이 셋을 대조한다.
 is_source() {
   local f="$1"
   # `set -f`로 파일명 확장을 끈다. 끄지 않으면 따옴표 없는 $ignore_globs·$source_globs가
@@ -89,7 +96,12 @@ is_source() {
   set +f
   case "$f" in
     doc/*|spike/*|.claude/*|.github/*) return 1 ;;
+  esac
+  # **파일명만 본다.** `**/*.md`·`**/*.test.*` 는 basename 규칙이라 전체 경로로 맞추면
+  # `src/a.test.dir/x.ts` 처럼 디렉터리에 `.test.` 가 든 경로까지 빼 버린다(glob 은 `/` 를 넘는다).
+  case "${f##*/}" in
     *.md) return 1 ;;
+    *.test.*) return 1 ;;
   esac
   return 0
 }

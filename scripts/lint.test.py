@@ -506,6 +506,19 @@ def _vocab(canon_has_value):
             'plugins/flow/skills/code-review/references/severity.md': body}
 
 
+def _gate_src(doc_lists_it):
+    """gate.source 정본 + 판정 규칙 산문. `doc_lists_it=False` 면 산문이 정본 값을 안 적는다."""
+    topo = {'version': 1,
+            'gate': {'source': {'defaultIgnore': ['**/*.md', '**/*.test.*'],
+                                'defaultNonSource': ['doc/']}}}
+    rows = "| ① | 기본: `**/*.md` · `**/*.test.*` |\n| ③ | 기본값 — `doc/` 밖 |\n"
+    if not doc_lists_it:
+        rows = "| ① | 기본: `**/*.md` |\n| ③ | 기본값 — `doc/` 밖 |\n"   # `**/*.test.*` 가 빠졌다
+    return {TOPO_REL: json.dumps(topo, ensure_ascii=False, indent=2),
+            'plugins/flow/skills/drift-check/references/rule.md':
+                "# 판정 규칙 (정본)\n\n| 순 | 규칙 |\n|:--|:--|\n" + rows}
+
+
 CASES = {
     # ── 표 렌더 4종 ──
     'table-columns': (
@@ -795,6 +808,14 @@ CASES = {
         _read_instr(named=True),
         # 표에만 있고 본문이 이름으로 안 가리킨다 — 실측에서 0/7 이 난 상태다
         _read_instr(named=False),
+    ),
+
+    # ── gate.source 정본 ↔ 판정 규칙 산문 ──
+    'gate-source-canon': (
+        _gate_src(doc_lists_it=True),
+        # 정본은 `**/*.test.*` 를 정하는데 규칙 문서가 그 값을 안 적는다 —
+        # 구현은 이 문서를 읽고 만들므로 여기서 갈리면 훅마다 다른 답이 난다
+        _gate_src(doc_lists_it=False),
     ),
 
     # ── 어휘 지도 ↔ 정본 조각 ──

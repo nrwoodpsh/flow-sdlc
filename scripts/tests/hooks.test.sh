@@ -435,11 +435,16 @@ t 아님   ".claude/settings.json"
 t 아님   "doc/README2.md"
 t 아님   "spike/z.ts"
 
-head_ "ignore 없음 — .md 는 기본 규칙이 뺀다"
+head_ "ignore 없음 — 기본 규칙이 .md·.test.* 를 뺀다"
 set_cfg '{"drift":{"mode":"warn"}}'
 t 드리프트 "lib/c3.ts"
-t 드리프트 "src/f.test.ts"
+# 여기가 뒤집힌 자리다. 전에는 `드리프트` 를 기대했다 — `drift.ignore` 를 안 적은 프로젝트에서
+# 쓰기 게이트는 topology 의 defaultIgnore(**/*.test.* 포함)로 떨어지는데 이 훅은 폴백에 그게
+# 없어서, **같은 파일에 두 훅이 다른 답을 냈다.** 아래 `세 구현 나란히 판정` 이 재발을 막는다.
+t 아님   "src/f.test.ts"
 t 아님   "notes2.md"
+# basename 규칙 — 디렉터리 이름에 든 `.test.` 는 빼지 않는다 (glob 은 `/` 를 넘는다)
+t 드리프트 "src/a.test.dir/x.ts"
 
 # ══════════════════════════════════════════════════════════
 head_ "drift-hook.sh — pre-commit 차단"
@@ -804,6 +809,63 @@ NP="$TMP/not-flow"; mkdir -p "$NP"
 gt 통과 "src/a.ts" "$NP" "flow 프로젝트가 아니다 → 조용히 통과"
 nfout=$(bash "$GT" --path src/a.ts --root "$NP" 2>&1)
 [ -z "$nfout" ] && ok_ "  └ 아무 말도 안 한다" || no_ "  └ 남의 프로젝트에서 말을 걸었다" "$nfout"
+
+head_ "세 구현 나란히 판정 — topology 의 gate.source 가 정본"
+# **같은 규칙이 세 곳에 구현돼 있다.**
+#   gate-source-write.sh  쓰기 게이트   — topology 의 gate.source 를 읽는다
+#   drift-hook.sh         pre-commit   — config 만 읽고, 없으면 자기 폴백 case
+#   drift-gate.yml.example CI          — 같은 규칙의 JS 판
+# 케이스를 손으로 적지 않고 **topology 에서 만든다** — 정본을 고치면 케이스가 따라온다.
+# 되돌림 확인: topology 의 defaultIgnore 에서 한 줄을 지우면 그 항목의 케이스가 사라지고,
+# 구현 한 곳만 고치면 아래 대조가 **실패해야** 한다.
+if [ -n "$CI_OK" ]; then
+  set_cfg '{"drift":{"mode":"warn"}}'        # 폴백 경로를 밟는다 (drift.ignore 없음)
+  # File Map 에 항목이 있어야 declared-file-map 모드다 — `-` 면 거친 바닥으로 떨어져 전부 통과한다
+  P9="$TMP/gate-3way"; mkproj_ "$P9" yes yes src/declared.ts yes
+
+  # topology 에서 케이스를 만든다: 각 정본 항목 → 그 항목에 걸리는 대표 경로
+  CASES=$(python3 - "$FLOW/flow.topology.json" <<'PY'
+import json,sys
+g=json.load(open(sys.argv[1]))['gate']['source']
+out=[]
+for pat in g.get('defaultIgnore') or []:
+    if pat.startswith('**/*.'):
+        suf = pat[4:].lstrip('*')                 # `*.test.*` → `.test.*`
+        if suf.endswith('*'): suf = suf[:-1] + 'ts'
+        out.append(('src/probe' + suf, pat))
+    elif pat.endswith('/**'):    out.append((pat[:-3] + '/probe.ts', pat))
+for pre in g.get('defaultNonSource') or []:
+    out.append((pre.rstrip('/') + '/probe.ts', pre))
+for p,why in out: print(p + '\t' + why)
+PY
+)
+  n3=0
+  while IFS=$'\t' read -r path why; do
+    [ -n "$path" ] || continue
+    n3=$((n3+1))
+    h=$(hook_says "$path"); c=$(ci_says "$path")
+    bash "$GT" --path "$path" --root "$P9" >/dev/null 2>&1
+    case $? in 0) w=아님 ;; 2) w=드리프트 ;; 3) w=확인 ;; *) w="이상" ;; esac
+    if [ "$h" = 아님 ] && [ "$c" = 아님 ] && [ "$w" = 아님 ]; then
+      ok_ "$(printf '%-26s 세 구현 모두 소스아님  (정본 %s)' "$path" "$why")"
+    else
+      no_ "$(printf '%-26s 훅=%s CI=%s 쓰기게이트=%s  (정본 %s — 셋이 같아야 한다)' "$path" "$h" "$c" "$w" "$why")"
+    fi
+  done <<< "$CASES"
+  [ "$n3" -gt 0 ] && ok_ "topology 에서 케이스 $n3 건 생성" || no_ "topology 에서 케이스를 못 만들었다"
+
+  # 양성 대조 — 평범한 소스는 셋 다 소스로 봐야 한다
+  h=$(hook_says "src/probe.ts"); c=$(ci_says "src/probe.ts")
+  bash "$GT" --path "src/probe.ts" --root "$P9" >/dev/null 2>&1
+  case $? in 0) w=아님 ;; 2) w=드리프트 ;; *) w=확인 ;; esac
+  if [ "$h" = 드리프트 ] && [ "$c" = 드리프트 ] && [ "$w" = 드리프트 ]; then
+    ok_ "src/probe.ts               세 구현 모두 소스 (양성 대조)"
+  else
+    no_ "$(printf 'src/probe.ts 훅=%s CI=%s 쓰기게이트=%s (셋 다 소스여야 한다)' "$h" "$c" "$w")"
+  fi
+else
+  printf '  ⚠ %s\n' "CI 스크립트를 못 써서 세 구현 대조를 건너뜀 — 통과로 세지 않는다"
+fi
 
 head_ "게이트 — 훅 모드 (PreToolUse Write·Edit 의 stdin JSON)"
 hgt() {  # <기대> <절대경로> <프로젝트> <설명>
