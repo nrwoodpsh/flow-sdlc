@@ -8,3 +8,9 @@ __pycache__/
 # (v1 도 같은 형태로 `project-template/.claude/` 를 잃을 뻔했다)
 !plugins/flow/procedures/build/
 !plugins/flow/procedures/build/*.md
+
+# 전역 gitignore 의 `.claude/` 가 경로 조건 규칙을 삼킨다 — rules/ 만 되살린다.
+# (`skills/release` 등 나머지는 로컬 전용 그대로)
+!.claude/
+.claude/*
+!.claude/rules/
