@@ -195,12 +195,17 @@ def render_guard_table(root):
 
 
 def render_guard_summary(root):
-    """CLAUDE.md 용 압축판 — **매 턴 실리는 파일이라 표를 안 싣는다.**"""
+    """CLAUDE.md 용 압축판 — **매 턴 실리는 파일이라 목록을 다 싣지 않는다.**
+
+    시도 자체를 막는 것은 정확한 목록이 아니라 카테고리 의미다 — 뜻과 대표 몇 개만 싣고,
+    실제로 막는 것은 훅, 전체 목록은 README 가 진다. 대표는 정본 순서 앞에서 뽑는다.
+    """
     gr = load_json(root, GUARD_RULES)
     classes = gr.get('classes') or {}
     rules = gr.get('rules') or []
     _, sh_rules, _, _ = shell_rules(root)
 
+    SHOW = 3  # 대표 개수 — 이하면 전부, 넘치면 '등 N건'
     L = []
     L.append('> 생성물이다. 손으로 고치지 마라. **전체 표는 `README.md`** — 여기는 매 턴 실려서 압축한다.')
     L.append('')
@@ -210,7 +215,10 @@ def render_guard_summary(root):
         if not names:
             continue
         lvl = meta.get('level', '')
-        L.append(f"- **{cid}** ({lvl}) — " + ' · '.join(f'`{n}`' for n in names))
+        gist = (meta.get('뜻') or '').split(' — ')[0]
+        shown = ' · '.join(f'`{n}`' for n in names[:SHOW])
+        tail = f' 등 {len(names)}건' if len(names) > SHOW else ''
+        L.append(f"- **{cid}** ({lvl}) — {gist}. {shown}{tail}")
     L.append(f"- **셸 정본** — " + ' · '.join(f"`{r['id']}`" for r in sh_rules))
     L.append('')
     L.append(f"차단 {sum(1 for r in rules if r.get('level') == 'block')}건 · "

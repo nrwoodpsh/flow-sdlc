@@ -40,10 +40,10 @@ flow 플러그인 자체를 만드는 리포다. 사용자 프로젝트가 아�
 <!-- flow:gen guard-summary -->
 > 생성물이다. 손으로 고치지 마라. **전체 표는 `README.md`** — 여기는 매 턴 실려서 압축한다.
 
-- **irreversible** (block) — `git push` · `git merge` · `git rebase` · `git filter-branch` · `git filter-repo` · `git reset --hard` · `git clean -f` · `git pull --rebase` · `git checkout (변경 버림)` · `git switch (변경 버림)` · `git restore` · `git reflog expire` · `git stash clear/drop` · `git update-ref -d` · `git subtree push` · `git branch -D` · `git worktree remove --force` · `git gc --prune` · `gh pr merge` · `gh release delete` · `gh repo delete` · `gh secret set` · `gh variable set`
-- **defense-off** (block) — `git commit --no-verify` · `git -c core.hooksPath=…`
-- **external-state** (block) — `gh release create` · `gh api 쓰기` · `gh api graphql mutation` · `gh api 쓰기(필드 플래그)` · `gh workflow run` · `gh pr create` · `gh issue create` · `gh repo create`
-- **judgement** (ask) — `git commit --amend` · `git tag -d` · `git stash pop`
+- **irreversible** (block) — 되돌릴 수 없다. `git push` · `git merge` · `git rebase` 등 23건
+- **defense-off** (block) — 다른 방어 층을 끈다. `git commit --no-verify` · `git -c core.hooksPath=…`
+- **external-state** (block) — 우리 저장소 밖에 상태를 만든다. `gh release create` · `gh api 쓰기` · `gh api graphql mutation` 등 8건
+- **judgement** (ask) — 판단이 갈린다. `git commit --amend` · `git tag -d` · `git stash pop`
 - **셸 정본** — `bash-write-redirect` · `bash-write-command` · `word-split-quotes`
 
 차단 33건 · 확인 3건 · 셸 3건. 늘리려면 `guard-rules.json` 에 한 줄.
