@@ -7,10 +7,7 @@
       }
     }
   },
-  "enabledPlugins": [
-    {
-      "marketplace": "flow-sdlc",
-      "plugin": "flow"
-    }
-  ]
+  "enabledPlugins": {
+    "flow@flow-sdlc": true
+  }
 }
